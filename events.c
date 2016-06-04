@@ -77,7 +77,7 @@ static void equeue_dealloc(struct equeue *q, struct event *e) {
     events_mutex_unlock(&q->freelock);
 }
 
-static void equeue_enqueue(struct equeue *q, struct event *e, int ms) {
+static int equeue_enqueue(struct equeue *q, struct event *e, int ms) {
     e->target = events_gettick() + (unsigned)ms;
 
     events_mutex_lock(&q->queuelock);
@@ -89,6 +89,8 @@ static void equeue_enqueue(struct equeue *q, struct event *e, int ms) {
     e->next = *p;
     *p = e;
     events_mutex_unlock(&q->queuelock);
+
+    return 0;
 }
 
 void equeue_dispatch(struct equeue *q, int ms) {
@@ -136,8 +138,12 @@ void equeue_dispatch(struct equeue *q, int ms) {
 }
 
 
-void event_call(struct equeue *q, void (*cb)(void*), void *data) {
+int event_call(struct equeue *q, void (*cb)(void*), void *data) {
     struct event *e = equeue_alloc(q);
+    if (!e) {
+        return -1;
+    }
+
     e->cb = cb;
     e->data = data;
     e->period = -1;
@@ -145,8 +151,12 @@ void event_call(struct equeue *q, void (*cb)(void*), void *data) {
     return equeue_enqueue(q, e, 0);
 }
 
-void event_call_in(struct equeue *q, void (*cb)(void*), void *data, int ms) {
+int event_call_in(struct equeue *q, void (*cb)(void*), void *data, int ms) {
     struct event *e = equeue_alloc(q);
+    if (!e) {
+        return -1;
+    }
+
     e->cb = cb;
     e->data = data;
     e->period = -1;
@@ -154,8 +164,12 @@ void event_call_in(struct equeue *q, void (*cb)(void*), void *data, int ms) {
     return equeue_enqueue(q, e, ms);
 }
 
-void event_call_every(struct equeue *q, void (*cb)(void*), void *data, int ms) {
+int event_call_every(struct equeue *q, void (*cb)(void*), void *data, int ms) {
     struct event *e = equeue_alloc(q);
+    if (!e) {
+        return -1;
+    }
+
     e->cb = cb;
     e->data = data;
     e->period = ms;
@@ -163,19 +177,23 @@ void event_call_every(struct equeue *q, void (*cb)(void*), void *data, int ms) {
     return equeue_enqueue(q, e, 0);
 }
 
-void event_call_and_wait(struct equeue *q, void (*cb)(void*), void *data) {
+int event_call_and_wait(struct equeue *q, void (*cb)(void*), void *data) {
     events_sema_t sema;
-    events_sema_create(&sema, 0); 
+    int err = events_sema_create(&sema, 0);
+    if (err < 0) {
+        return err;
+    }
 
     struct event *e = equeue_alloc(q);
     e->cb = cb;
     e->data = data;
     e->period = -1;
     e->sema = 0;
-    equeue_enqueue(q, e, 0);
+    err = equeue_enqueue(q, e, 0);
 
     events_sema_wait(&sema, -1);
     events_sema_destroy(&sema);
+    return err;
 }
 
 
@@ -197,7 +215,7 @@ void event_dealloc(struct equeue *q, void *p) {
     equeue_dealloc(q, e);
 }
 
-void event_call_alloced(struct equeue *q,
+int event_call_alloced(struct equeue *q,
         void (*cb)(void*), void *p) {
     struct event *e = (struct event*)p - 1;
     e->cb = cb;
@@ -207,7 +225,7 @@ void event_call_alloced(struct equeue *q,
     return equeue_enqueue(q, e, 0);
 }
 
-void event_call_alloced_in(struct equeue *q,
+int event_call_alloced_in(struct equeue *q,
         void (*cb)(void*), void *p, int ms) {
     struct event *e = (struct event*)p - 1;
     e->cb = cb;
@@ -217,7 +235,7 @@ void event_call_alloced_in(struct equeue *q,
     return equeue_enqueue(q, e, ms);
 }
 
-void event_call_alloced_every(struct equeue *q,
+int event_call_alloced_every(struct equeue *q,
         void (*cb)(void*), void *p, int ms) {
     struct event *e = (struct event*)p - 1;
     e->cb = cb;
@@ -227,18 +245,22 @@ void event_call_alloced_every(struct equeue *q,
     return equeue_enqueue(q, e, 0);
 }
 
-void event_call_alloced_and_wait(struct equeue *q,
+int event_call_alloced_and_wait(struct equeue *q,
         void (*cb)(void*), void *p) {
     events_sema_t sema;
-    events_sema_create(&sema, 0); 
+    int err = events_sema_create(&sema, 0); 
+    if (err < 0) {
+        return err;
+    }
 
     struct event *e = (struct event*)p - 1;
     e->cb = cb;
     e->data = p;
     e->period = -1;
     e->sema = &sema;
-    equeue_enqueue(q, e, 0);
+    err = equeue_enqueue(q, e, 0);
 
     events_sema_wait(&sema, -1);
     events_sema_destroy(&sema);
+    return err;
 }

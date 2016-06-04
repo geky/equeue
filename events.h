@@ -40,18 +40,18 @@ void equeue_destroy(struct equeue*);
 void equeue_dispatch(struct equeue*, int ms);
 
 // Simple event calls
-void event_call(struct equeue*, void (*cb)(void*), void*);
-void event_call_in(struct equeue*, void (*cb)(void*), void*, int ms);
-void event_call_every(struct equeue*, void (*cb)(void*), void*, int ms);
-void event_call_and_wait(struct equeue*, void (*cb)(void*), void*);
+int event_call(struct equeue*, void (*cb)(void*), void*);
+int event_call_in(struct equeue*, void (*cb)(void*), void*, int ms);
+int event_call_every(struct equeue*, void (*cb)(void*), void*, int ms);
+int event_call_and_wait(struct equeue*, void (*cb)(void*), void*);
 
 // Events with queue handled blocks of memory
 void *event_alloc(struct equeue*, unsigned size);
 void event_dealloc(struct equeue*, void*);
-void event_call_alloced(struct equeue*, void (*cb)(void*), void*);
-void event_call_alloced_in(struct equeue*, void (*cb)(void*), void*, int ms);
-void event_call_alloced_every(struct equeue*, void (*cb)(void*), void*, int ms);
-void event_call_alloced_and_wait(struct equeue*, void (*cb)(void*), void*);
+int event_call_alloced(struct equeue*, void (*cb)(void*), void*);
+int event_call_alloced_in(struct equeue*, void (*cb)(void*), void*, int ms);
+int event_call_alloced_every(struct equeue*, void (*cb)(void*), void*, int ms);
+int event_call_alloced_and_wait(struct equeue*, void (*cb)(void*), void*);
 
 
 #endif
