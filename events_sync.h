@@ -11,7 +11,7 @@
 typedef struct {} events_mutex_t;
 
 // Mutex operations
-void events_mutex_create(events_mutex_t *m);
+int events_mutex_create(events_mutex_t *m);
 void events_mutex_destroy(events_mutex_t *m);
 void events_mutex_lock(events_mutex_t *m);
 void events_mutex_unlock(events_mutex_t *m);
@@ -21,7 +21,7 @@ void events_mutex_unlock(events_mutex_t *m);
 typedef struct {} events_sema_t;
 
 // Semaphore operations
-void events_sema_create(events_sema_t *s, unsigned v);
+int events_sema_create(events_sema_t *s, unsigned v);
 void events_sema_destroy(events_sema_t *s);
 void events_sema_release(events_sema_t *s);
 bool events_sema_wait(events_sema_t *s, int ms);

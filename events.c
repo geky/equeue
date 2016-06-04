@@ -8,13 +8,16 @@ static inline struct event *equeue_event(struct equeue *q, unsigned i) {
             + i*(sizeof(struct event)+q->size));
 }
 
-void equeue_create(struct equeue *q, unsigned count, unsigned size) {
+int equeue_create(struct equeue *q, unsigned count, unsigned size) {
     void *buffer = malloc(count * (sizeof(struct event)+q->size));
+    if (!buffer) {
+        return -1;
+    }
 
     return equeue_create_inplace(q, count, size, buffer);
 }
 
-void equeue_create_inplace(struct equeue *q,
+int equeue_create_inplace(struct equeue *q,
         unsigned count, unsigned size, void *buffer) {
     q->size = size;
     q->buffer = buffer;
@@ -28,9 +31,23 @@ void equeue_create_inplace(struct equeue *q,
         equeue_event(q, count-1)->next = 0;
     }
 
-    events_sema_create(&q->eventsema, 0);
-    events_mutex_create(&q->queuelock);
-    events_mutex_create(&q->freelock);
+    int err;
+    err = events_sema_create(&q->eventsema, 0);
+    if (err < 0) {
+        return err;
+    }
+
+    err = events_mutex_create(&q->queuelock);
+    if (err < 0) {
+        return err;
+    }
+
+    err = events_mutex_create(&q->freelock);
+    if (err < 0) {
+        return err;
+    }
+
+    return 0;
 }
 
 void equeue_destroy(struct equeue *q) {

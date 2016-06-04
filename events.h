@@ -33,8 +33,8 @@ struct equeue {
 };
 
 // Queue operations
-void equeue_create(struct equeue*, unsigned count, unsigned size);
-void equeue_create_inplace(struct equeue*,
+int equeue_create(struct equeue*, unsigned count, unsigned size);
+int equeue_create_inplace(struct equeue*,
         unsigned count, unsigned size, void *buffer);
 void equeue_destroy(struct equeue*);
 void equeue_dispatch(struct equeue*, int ms);
