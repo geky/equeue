@@ -21,9 +21,6 @@ CFLAGS += -m$(WORD)
 endif
 CFLAGS += -std=c99
 CFLAGS += -Wall -Winline
-CFLAGS += -D_POSIX_C_SOURCE=200112L
-
-LFLAGS += -lpthread
 
 
 all: $(TARGET)
