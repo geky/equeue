@@ -23,6 +23,7 @@ int equeue_create_inplace(struct equeue *q,
     q->buffer = buffer;
     q->free = (struct event*)buffer;
     q->queue = 0;
+    q->next_id = 42;
 
     if (q->free) {
         for (unsigned i = 0; i < count-1; i++) {
@@ -81,6 +82,14 @@ static inline int events_until(unsigned t) {
     return (int)(t - events_tick());
 }
 
+static inline int equeue_next_id(struct equeue *q) {
+    int id = q->next_id++;
+    if (q->next_id < 0) {
+        q->next_id = 42;
+    }
+    return id;
+}
+
 static int equeue_enqueue(struct equeue *q, struct event *e, int ms) {
     e->target = events_tick() + (unsigned)ms;
 
@@ -95,7 +104,21 @@ static int equeue_enqueue(struct equeue *q, struct event *e, int ms) {
     events_mutex_unlock(&q->queuelock);
 
     events_sema_release(&q->eventsema);
-    return 0;
+    return e->id;
+}
+
+static void equeue_cancel(struct equeue *q, int id) {
+    printf("warble %d\n");
+    events_mutex_lock(&q->queuelock);
+    for (struct event **p = &q->queue; *p; p = &(*p)->next) {
+        printf("hit %d %p\n", (*p)->id, (*p)->next);
+        if ((*p)->id == id) {
+            printf("yay!\n");
+            *p = (*p)->next;
+            break;
+        }
+    }
+    events_mutex_unlock(&q->queuelock);
 }
 
 void equeue_dispatch(struct equeue *q, int ms) {
@@ -196,6 +219,10 @@ int event_call_and_wait(struct equeue *q, void (*cb)(void*), void *data) {
     }
 
     struct event *e = equeue_alloc(q);
+    if (!e) {
+        return -1;
+    }
+
     e->cb = cb;
     e->data = data;
     e->period = -1;
@@ -218,6 +245,7 @@ void *event_alloc(struct equeue *q, unsigned size) {
         return 0;
     }
 
+    e->id = equeue_next_id(q);
     return e + 1;
 }
 
@@ -274,4 +302,8 @@ int event_call_alloced_and_wait(struct equeue *q,
     events_sema_wait(&sema, -1);
     events_sema_destroy(&sema);
     return err;
+}
+
+void event_cancel(struct equeue *q, int id) {
+    return equeue_cancel(q, id);
 }

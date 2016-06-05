@@ -14,6 +14,7 @@ struct event {
     struct event *next;
     unsigned target;
     int period;
+    int id;
     events_sema_t *sema;
 
     void (*cb)(void *);
@@ -25,6 +26,7 @@ struct equeue {
     struct event *queue;
     struct event *free;
     void *buffer;
+    int next_id;
 
     events_sema_t eventsema;
     events_mutex_t queuelock;
@@ -67,6 +69,14 @@ int event_call_alloced(struct equeue*, void (*cb)(void*), void*);
 int event_call_alloced_in(struct equeue*, void (*cb)(void*), void*, int ms);
 int event_call_alloced_every(struct equeue*, void (*cb)(void*), void*, int ms);
 int event_call_alloced_and_wait(struct equeue*, void (*cb)(void*), void*);
+
+// Cancel events that are in flight
+//
+// Every event_call function returns a non-negative identifier on success
+// that can be used to cancel an in-flight event. If the event has already
+// been dispatched or does not exist, no error occurs. Note, this does not
+// stop a currently executing function
+void event_cancel(struct equeue *, int event);
 
 
 #endif
