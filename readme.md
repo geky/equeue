@@ -32,4 +32,14 @@ int main() {
 }
 ```
 
+## Porting ##
+
+The events library only requires the following:
+- monotonic counter
+- non-recursive mutex
+- binary semaphore
+
+Supported implementations are hosted as branches on this repo:
+- Posix
+- mbed
 
