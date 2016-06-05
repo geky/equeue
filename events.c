@@ -132,7 +132,9 @@ void equeue_dispatch(struct equeue *q, int ms) {
             deadline = ms;
         }
 
-        if (!events_sema_wait(&q->eventsema, deadline) && ms == deadline) {
+        events_sema_wait(&q->eventsema, deadline);
+
+        if (ms >= 0 && (ms -= deadline) < 0) {
             return;
         }
     }
