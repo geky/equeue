@@ -32,7 +32,7 @@ int equeue_create_inplace(struct equeue *q,
     }
 
     int err;
-    err = events_sema_create(&q->eventsema, 0);
+    err = events_sema_create(&q->eventsema);
     if (err < 0) {
         return err;
     }
@@ -179,7 +179,7 @@ int event_call_every(struct equeue *q, void (*cb)(void*), void *data, int ms) {
 
 int event_call_and_wait(struct equeue *q, void (*cb)(void*), void *data) {
     events_sema_t sema;
-    int err = events_sema_create(&sema, 0);
+    int err = events_sema_create(&sema);
     if (err < 0) {
         return err;
     }
@@ -248,7 +248,7 @@ int event_call_alloced_every(struct equeue *q,
 int event_call_alloced_and_wait(struct equeue *q,
         void (*cb)(void*), void *p) {
     events_sema_t sema;
-    int err = events_sema_create(&sema, 0); 
+    int err = events_sema_create(&sema); 
     if (err < 0) {
         return err;
     }
