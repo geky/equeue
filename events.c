@@ -90,6 +90,7 @@ static int equeue_enqueue(struct equeue *q, struct event *e, int ms) {
     *p = e;
     events_mutex_unlock(&q->queuelock);
 
+    events_sema_release(&q->eventsema);
     return 0;
 }
 
