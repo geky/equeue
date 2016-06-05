@@ -185,7 +185,7 @@ int event_call_every(struct equeue *q, void (*cb)(void*), void *data, int ms) {
     e->data = data;
     e->period = ms;
     e->sema = 0;
-    return equeue_enqueue(q, e, 0);
+    return equeue_enqueue(q, e, ms);
 }
 
 int event_call_and_wait(struct equeue *q, void (*cb)(void*), void *data) {
@@ -253,7 +253,7 @@ int event_call_alloced_every(struct equeue *q,
     e->data = p;
     e->period = ms;
     e->sema = 0;
-    return equeue_enqueue(q, e, 0);
+    return equeue_enqueue(q, e, ms);
 }
 
 int event_call_alloced_and_wait(struct equeue *q,
