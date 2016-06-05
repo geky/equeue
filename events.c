@@ -127,7 +127,7 @@ void equeue_dispatch(struct equeue *q, int ms) {
             events_mutex_unlock(&q->queuelock);
         }
 
-        if ((unsigned)ms < deadline) {
+        if (ms >= 0 && ms < deadline) {
             deadline = ms;
         }
 
