@@ -77,6 +77,10 @@ static void equeue_dealloc(struct equeue *q, struct event *e) {
     events_mutex_unlock(&q->freelock);
 }
 
+static inline int events_until(unsigned t) {
+    return (int)(t - events_tick());
+}
+
 static int equeue_enqueue(struct equeue *q, struct event *e, int ms) {
     e->target = events_tick() + (unsigned)ms;
 
@@ -95,13 +99,15 @@ static int equeue_enqueue(struct equeue *q, struct event *e, int ms) {
 }
 
 void equeue_dispatch(struct equeue *q, int ms) {
-    int deadline = ms;
+    unsigned timeout = events_tick() + (unsigned)ms;
 
     while (1) {
+        int deadline = -1;
+
         if (q->queue) {
             events_mutex_lock(&q->queuelock);
             while (q->queue) {
-                deadline = (int)(q->queue->target - events_tick());
+                deadline = events_until(q->queue->target);
                 if (deadline > 0) {
                     break;
                 }
@@ -122,19 +128,21 @@ void equeue_dispatch(struct equeue *q, int ms) {
                     equeue_dealloc(q, e);
                 }
 
-                deadline = ms;
                 events_mutex_lock(&q->queuelock);
             }
             events_mutex_unlock(&q->queuelock);
         }
 
-        if (ms >= 0 && ms < deadline) {
-            deadline = ms;
+        if (ms >= 0) {
+            int nms = events_until(timeout);
+            if ((unsigned)nms < (unsigned)deadline) {
+                deadline = nms;
+            }
         }
 
         events_sema_wait(&q->eventsema, deadline);
 
-        if (ms >= 0 && (ms -= deadline) < 0) {
+        if (ms >= 0 && events_until(timeout) <= 0) {
             return;
         }
     }
