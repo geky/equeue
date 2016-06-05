@@ -82,7 +82,7 @@ static int equeue_enqueue(struct equeue *q, struct event *e, int ms) {
 
     events_mutex_lock(&q->queuelock);
     struct event **p = &q->queue;
-    while (*p && (*p)->target < e->target) {
+    while (*p && (*p)->target <= e->target) {
         p = &(*p)->next;
     }
     
