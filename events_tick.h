@@ -5,7 +5,8 @@
 #define EVENTS_TICK_H
 
 
-unsigned events_gettick(void);
+// Access monotonic tick
+unsigned events_tick(void);
 
 
 #endif

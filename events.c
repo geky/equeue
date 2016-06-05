@@ -78,7 +78,7 @@ static void equeue_dealloc(struct equeue *q, struct event *e) {
 }
 
 static int equeue_enqueue(struct equeue *q, struct event *e, int ms) {
-    e->target = events_gettick() + (unsigned)ms;
+    e->target = events_tick() + (unsigned)ms;
 
     events_mutex_lock(&q->queuelock);
     struct event **p = &q->queue;
@@ -100,7 +100,7 @@ void equeue_dispatch(struct equeue *q, int ms) {
         if (q->queue) {
             events_mutex_lock(&q->queuelock);
             while (q->queue) {
-                deadline = (int)(q->queue->target - events_gettick());
+                deadline = (int)(q->queue->target - events_tick());
                 if (deadline > 0) {
                     break;
                 }
