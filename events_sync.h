@@ -8,6 +8,10 @@
 
 
 // Mutex type
+//
+// If this type is safe in interrupt contexts, then
+// the associated event queue will also be safe in
+// interrupt contexts.
 typedef struct {} events_mutex_t;
 
 // Mutex operations
@@ -18,6 +22,9 @@ void events_mutex_unlock(events_mutex_t *m);
 
 
 // Semaphore type
+//
+// Optimal implementation is a binary semaphore,
+// however a regular semaphore is sufficient.
 typedef struct {} events_sema_t;
 
 // Semaphore operations
