@@ -82,7 +82,7 @@ static inline int events_until(unsigned t) {
     return (int)(t - events_tick());
 }
 
-static inline int equeue_next_id(struct equeue *q) {
+static int equeue_next_id(struct equeue *q) {
     int id = q->next_id++;
     if (q->next_id < 0) {
         q->next_id = 42;
@@ -90,10 +90,9 @@ static inline int equeue_next_id(struct equeue *q) {
     return id;
 }
 
-static int equeue_enqueue(struct equeue *q, struct event *e, int ms) {
+static int equeue_requeue(struct equeue *q, struct event *e, int ms) {
     e->target = events_tick() + (unsigned)ms;
 
-    events_mutex_lock(&q->queuelock);
     struct event **p = &q->queue;
     while (*p && (*p)->target <= e->target) {
         p = &(*p)->next;
@@ -101,19 +100,22 @@ static int equeue_enqueue(struct equeue *q, struct event *e, int ms) {
     
     e->next = *p;
     *p = e;
-    events_mutex_unlock(&q->queuelock);
 
-    events_sema_release(&q->eventsema);
     return e->id;
 }
 
+static int equeue_enqueue(struct equeue *q, struct event *e, int ms) {
+    events_mutex_lock(&q->queuelock);
+    int id = equeue_requeue(q, e, ms);
+    events_mutex_unlock(&q->queuelock);
+    events_sema_release(&q->eventsema);
+    return id;
+}
+
 static void equeue_cancel(struct equeue *q, int id) {
-    printf("warble %d\n");
     events_mutex_lock(&q->queuelock);
     for (struct event **p = &q->queue; *p; p = &(*p)->next) {
-        printf("hit %d %p\n", (*p)->id, (*p)->next);
         if ((*p)->id == id) {
-            printf("yay!\n");
             *p = (*p)->next;
             break;
         }
@@ -137,6 +139,10 @@ void equeue_dispatch(struct equeue *q, int ms) {
 
                 struct event *e = q->queue;
                 q->queue = e->next;
+
+                if (e->period >= 0) {
+                    equeue_requeue(q, e, e->period);
+                }
                 events_mutex_unlock(&q->queuelock);
 
                 e->cb(e->data);
@@ -145,9 +151,7 @@ void equeue_dispatch(struct equeue *q, int ms) {
                     events_sema_release(e->sema);
                 }
 
-                if (e->period >= 0) {
-                    equeue_enqueue(q, e, e->period);
-                } else {
+                if (e->period < 0) {
                     equeue_dealloc(q, e);
                 }
 
