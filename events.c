@@ -129,6 +129,45 @@ static int equeue_enqueue(struct equeue *q, struct event *e, int ms) {
     return id;
 }
 
+static int equeue_wait(struct equeue *q, int id, int ms) {
+    events_sema_t sema;
+    struct event *e = 0;
+
+    int err = events_sema_create(&sema);
+    if (err < 0) {
+        return err;
+    }
+
+    events_mutex_lock(&q->queuelock);
+    if (q->head->id == id) {
+        e = q->head;
+    } else {
+        for (struct event **p = &q->queue; *p; p = &(*p)->next) {
+            if ((*p)->id == id) {
+                e = *p;
+                break;
+            }
+        }
+    }
+
+    // not enqueued
+    if (!e) {
+        events_mutex_unlock(&q->queuelock);
+        return 0;
+    }
+
+    // already waited on
+    if (e->sema) {
+        events_mutex_unlock(&q->queuelock);
+        return -1;
+    }
+
+    e->sema = &sema;
+    events_mutex_unlock(&q->queuelock);
+
+    return events_sema_wait(&sema, ms);
+}
+
 static void equeue_cancel(struct equeue *q, int id) {
     events_mutex_lock(&q->queuelock);
     for (struct event **p = &q->queue; *p; p = &(*p)->next) {
@@ -164,12 +203,15 @@ void equeue_dispatch(struct equeue *q, int ms) {
             q->queue = e->next;
 
             if (e->period >= 0) {
+                // requeue periodic tasks to avoid race conditions
+                // in event_cancel
                 equeue_requeue(q, e, e->period);
             }
 
             q->head = e;
             events_mutex_unlock(&q->queuelock);
 
+            // actually dispatch the callback
             e->cb(e + 1);
 
             events_mutex_lock(&q->queuelock);
@@ -247,8 +289,7 @@ int event_post(struct equeue *q, void (*cb)(void*), void *p) {
 }
 
 int event_wait(struct equeue *q, int id, int ms) {
-    // TODO
-    return -1;
+    return equeue_wait(q, id, ms);
 }
 
 void event_cancel(struct equeue *q, int id) {
