@@ -6,7 +6,8 @@
 
 // System specific files
 #include "events_tick.h"
-#include "events_sync.h"
+#include "events_mutex.h"
+#include "events_sema.h"
 
 
 // Event/queue structures
