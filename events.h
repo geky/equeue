@@ -18,11 +18,12 @@ struct event {
     events_sema_t *sema;
 
     void (*cb)(void *);
-    void *data;
+    // data follows
 };
 
 struct equeue {
     unsigned size;
+    struct event *head;
     struct event *queue;
     struct event *free;
     void *buffer;
@@ -35,8 +36,10 @@ struct equeue {
 
 // Queue operations
 //
-// Creation results in negative value on failure. equeue_dispatch
-// will execute any callbacks enqeueud in the specified queue.
+// Creation results in negative value on failure.
+//
+// event_dispatch will execute any callbacks enqueued for the
+// specified time in milliseconds, or forever if ms is negative.
 int equeue_create(struct equeue*, unsigned count, unsigned size);
 int equeue_create_inplace(struct equeue*,
         unsigned count, unsigned size, void *buffer);
@@ -46,37 +49,63 @@ void equeue_dispatch(struct equeue*, int ms);
 // Simple event calls
 //
 // Passed callback will be executed in the associated equeue's
-// dispatch call.
+// dispatch call with the data pointer passed unmodified
 //
-// event_call will result in a negative value if no memory is available.
-int event_call(struct equeue*, void (*cb)(void*), void*);
-int event_call_in(struct equeue*, void (*cb)(void*), void*, int ms);
-int event_call_every(struct equeue*, void (*cb)(void*), void*, int ms);
-int event_call_and_wait(struct equeue*, void (*cb)(void*), void*);
+// event_call       - Immediately post an event to the queue
+// event_call_in    - Post an event after a specified time in milliseconds
+// event_call_every - Post an event periodically in milliseconds
+//
+// These calls will result in a negative value if no memory is available,
+// otherwise it will result in a unique identifier that can be passed to
+// event_wait and event_cancel.
+int event_call(struct equeue*, void (*cb)(void*), void *data);
+int event_call_in(struct equeue*, void (*cb)(void*), void *data, int ms);
+int event_call_every(struct equeue*, void (*cb)(void*), void *data, int ms);
 
 // Events with queue handled blocks of memory
 //
-// Argument to event_call_alloced must point to a result of a 
-// event_alloc call and the associated memory is automatically
-// freed after the event is dispatched.
+// Argument to event_post must point to a result of a event_alloc call
+// and the associated memory is automatically freed after the event
+// is dispatched.
 //
-// event_alloc will result in null and event_call_alloced will result
-// in a negative value if no memory is available or requested size is
-// less than the size passed to equeue_create.
+// event_alloc will result in null if no memory is available
+// or the requested size is less than the size passed to equeue_create.
 void *event_alloc(struct equeue*, unsigned size);
 void event_dealloc(struct equeue*, void*);
-int event_call_alloced(struct equeue*, void (*cb)(void*), void*);
-int event_call_alloced_in(struct equeue*, void (*cb)(void*), void*, int ms);
-int event_call_alloced_every(struct equeue*, void (*cb)(void*), void*, int ms);
-int event_call_alloced_and_wait(struct equeue*, void (*cb)(void*), void*);
+
+// Configure an allocated event
+// 
+// event_delay     - Specify a millisecond delay before posting an event
+// event_period    - Specify a millisecond period to repeatedly post an event
+// event_tolerance - Specify a +/- millisecond hint to the event loop
+void event_delay(void *event, int ms);
+void event_period(void *event, int ms);
+void event_tolerance(void *event, int ms);
+
+// Post an allocted event to the event queue
+//
+// Argument to event_post must point to a result of a event_alloc call
+// and the associated memory is automatically freed after the event
+// is dispatched.
+//
+// This call results in an unique identifier that can be passed to
+// event_wait and event_cancel.
+int event_post(struct equeue*, void (*cb)(void*), void *event);
+
+// Waits for an event to complete
+//
+// Returns a negative value if the event took longer to complete
+// than the specified time in milliseconds. A negative time will
+// wait forever.
+int event_wait(struct equeue*, int event, int ms);
 
 // Cancel events that are in flight
 //
 // Every event_call function returns a non-negative identifier on success
 // that can be used to cancel an in-flight event. If the event has already
-// been dispatched or does not exist, no error occurs. Note, this does not
-// stop a currently executing function
-void event_cancel(struct equeue *, int event);
+// been dispatched or does not exist, no error occurs. Note, this can not
+// stop a currently executing event
+void event_cancel(struct equeue*, int event);
 
 
 #endif
