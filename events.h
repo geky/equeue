@@ -21,6 +21,7 @@ struct event {
     int period;
     int id;
     events_sema_t *sema;
+    void (*dtor)(void *);
 
     void (*cb)(void *);
     // data follows
@@ -82,10 +83,12 @@ void event_dealloc(struct equeue*, void*);
 
 // Configure an allocated event
 // 
-// event_delay     - Specify a millisecond delay before posting an event
-// event_period    - Specify a millisecond period to repeatedly post an event
+// event_delay  - Specify a millisecond delay before posting an event
+// event_period - Specify a millisecond period to repeatedly post an event
+// event_dtor   - Specify a destructor to run before the memory is deallocated
 void event_delay(void *event, int ms);
 void event_period(void *event, int ms);
+void event_dtor(void *event, void (*dtor)(void *));
 
 // Post an allocted event to the event queue
 //
