@@ -177,6 +177,8 @@ static void equeue_cancel(struct equeue *q, int id) {
         }
     }
     events_mutex_unlock(&q->queuelock);
+
+    equeue_dealloc(q, e);
 }
 
 void equeue_dispatch(struct equeue *q, int ms) {
