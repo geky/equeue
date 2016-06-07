@@ -277,10 +277,6 @@ void event_period(void *p, int ms) {
     e->period = ms;
 }
 
-void event_tolerance(void *p, int ms) {
-    // currently ignored
-}
-
 // event operations
 int event_post(struct equeue *q, void (*cb)(void*), void *p) {
     struct event *e = (struct event*)p - 1;

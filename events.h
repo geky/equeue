@@ -84,10 +84,8 @@ void event_dealloc(struct equeue*, void*);
 // 
 // event_delay     - Specify a millisecond delay before posting an event
 // event_period    - Specify a millisecond period to repeatedly post an event
-// event_tolerance - Specify a +/- millisecond hint to the event loop
 void event_delay(void *event, int ms);
 void event_period(void *event, int ms);
-void event_tolerance(void *event, int ms);
 
 // Post an allocted event to the event queue
 //
