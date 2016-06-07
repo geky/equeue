@@ -85,10 +85,13 @@ static struct event *equeue_alloc(struct equeue *q) {
     struct event *e = 0;
 
     events_mutex_lock(&q->freelock);
-    if (q->free) {
-        e = q->free;
-        q->free = e->next;
+    if (!q->free) {
+        events_mutex_unlock(&q->freelock);
+        return 0;
     }
+
+    e = q->free;
+    q->free = e->next;
     events_mutex_unlock(&q->freelock);
 
     e->id = equeue_next_id(q);
