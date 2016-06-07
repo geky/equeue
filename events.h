@@ -42,13 +42,15 @@ struct equeue {
 // Queue operations
 //
 // Creation results in negative value on failure.
-//
-// event_dispatch will execute any callbacks enqueued for the
-// specified time in milliseconds, or forever if ms is negative.
 int equeue_create(struct equeue*, unsigned count, unsigned size);
 int equeue_create_inplace(struct equeue*,
         unsigned count, unsigned size, void *buffer);
 void equeue_destroy(struct equeue*);
+
+// Dispatch events
+//
+// Executes any callbacks enqueued for the specified time in milliseconds,
+// or forever if ms is negative
 void equeue_dispatch(struct equeue*, int ms);
 
 // Simple event calls
