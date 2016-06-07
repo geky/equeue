@@ -4,6 +4,10 @@
 #ifndef EVENTS_MUTEX_H
 #define EVENTS_MUTEX_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 // Mutex type
 //
@@ -18,5 +22,9 @@ void events_mutex_destroy(events_mutex_t *m);
 void events_mutex_lock(events_mutex_t *m);
 void events_mutex_unlock(events_mutex_t *m);
 
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

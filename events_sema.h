@@ -4,6 +4,10 @@
 #ifndef EVENTS_SEMA_H
 #define EVENTS_SEMA_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdbool.h>
 
 
@@ -19,5 +23,9 @@ void events_sema_destroy(events_sema_t *s);
 void events_sema_release(events_sema_t *s);
 bool events_sema_wait(events_sema_t *s, int ms);
 
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

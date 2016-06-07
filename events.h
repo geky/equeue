@@ -4,6 +4,10 @@
 #ifndef EVENTS_H
 #define EVENTS_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // System specific files
 #include "events_tick.h"
 #include "events_mutex.h"
@@ -108,5 +112,9 @@ int event_wait(struct equeue*, int event, int ms);
 // stop a currently executing event
 void event_cancel(struct equeue*, int event);
 
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
