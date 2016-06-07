@@ -19,7 +19,7 @@ int equeue_create(struct equeue *q, unsigned count, unsigned size) {
         size = sizeof(struct ecallback);
     }
 
-    void *buffer = malloc(count * (sizeof(struct event)+q->size));
+    void *buffer = malloc(count * (sizeof(struct event)+size));
     if (!buffer) {
         return -1;
     }
