@@ -74,6 +74,14 @@ void equeue_destroy(struct equeue *q) {
 }
 
 // equeue mem functions
+static int equeue_next_id(struct equeue *q) {
+    int id = q->next_id++;
+    if (q->next_id < 0) {
+        q->next_id = 42;
+    }
+    return id;
+}
+
 static struct event *equeue_alloc(struct equeue *q) {
     struct event *e = 0;
 
@@ -84,10 +92,19 @@ static struct event *equeue_alloc(struct equeue *q) {
     }
     events_mutex_unlock(&q->freelock);
 
+    e->id = equeue_next_id(q);
+    e->target = 0;
+    e->period = -1;
+    e->sema = 0;
+    e->dtor = 0;
     return e;
 }
 
 static void equeue_dealloc(struct equeue *q, struct event *e) {
+    if (e->dtor) {
+        e->dtor(e+1);
+    }
+
     events_mutex_lock(&q->freelock);
     e->next = q->free;
     q->free = e;
@@ -97,14 +114,6 @@ static void equeue_dealloc(struct equeue *q, struct event *e) {
 // equeue scheduling functions
 static inline int events_until(unsigned t) {
     return (int)(t - events_tick());
-}
-
-static int equeue_next_id(struct equeue *q) {
-    int id = q->next_id++;
-    if (q->next_id < 0) {
-        q->next_id = 42;
-    }
-    return id;
 }
 
 static int equeue_requeue(struct equeue *q, struct event *e, int ms) {
@@ -169,14 +178,21 @@ static int equeue_wait(struct equeue *q, int id, int ms) {
 }
 
 static void equeue_cancel(struct equeue *q, int id) {
+    struct event *e = 0;
+
     events_mutex_lock(&q->queuelock);
     for (struct event **p = &q->queue; *p; p = &(*p)->next) {
         if ((*p)->id == id) {
+            e = *p;
             *p = (*p)->next;
             break;
         }
     }
     events_mutex_unlock(&q->queuelock);
+
+    if (e) {
+        equeue_dealloc(q, e);
+    }
 }
 
 void equeue_dispatch(struct equeue *q, int ms) {
@@ -254,10 +270,6 @@ void *event_alloc(struct equeue *q, unsigned size) {
         return 0;
     }
 
-    e->id = equeue_next_id(q);
-    e->target = 0;
-    e->period = -1;
-    e->sema = 0;
     return e + 1;
 }
 
@@ -277,8 +289,9 @@ void event_period(void *p, int ms) {
     e->period = ms;
 }
 
-void event_tolerance(void *p, int ms) {
-    // currently ignored
+void event_dtor(void *p, void (*dtor)(void *)) {
+    struct event *e = (struct event*)p - 1;
+    e->dtor = dtor;
 }
 
 // event operations
