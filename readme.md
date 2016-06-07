@@ -32,6 +32,11 @@ int main() {
 }
 ```
 
+The events library can be used for normal event loops, however it also
+supports multithreaded environments. More information on the idea
+behind composable event loops 
+[here](https://gist.github.com/geky/4969d940f1bd5596bdc10e79093e2553).
+
 ## Porting ##
 
 The events library only requires the following:
@@ -42,4 +47,3 @@ The events library only requires the following:
 Supported implementations are hosted as branches on this repo:
 - Posix
 - mbed
-
