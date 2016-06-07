@@ -36,7 +36,6 @@ int equeue_create_inplace(struct equeue *q,
     q->size = size;
     q->buffer = buffer;
     q->free = (struct event*)buffer;
-    q->head = 0;
     q->queue = 0;
     q->next_id = 42;
 
@@ -95,7 +94,6 @@ static struct event *equeue_alloc(struct equeue *q) {
     e->id = equeue_next_id(q);
     e->target = 0;
     e->period = -1;
-    e->sema = 0;
     e->dtor = 0;
     return e;
 }
@@ -136,45 +134,6 @@ static int equeue_enqueue(struct equeue *q, struct event *e, int ms) {
     events_mutex_unlock(&q->queuelock);
     events_sema_release(&q->eventsema);
     return id;
-}
-
-static int equeue_wait(struct equeue *q, int id, int ms) {
-    events_sema_t sema;
-    struct event *e = 0;
-
-    int err = events_sema_create(&sema);
-    if (err < 0) {
-        return err;
-    }
-
-    events_mutex_lock(&q->queuelock);
-    if (q->head->id == id) {
-        e = q->head;
-    } else {
-        for (struct event **p = &q->queue; *p; p = &(*p)->next) {
-            if ((*p)->id == id) {
-                e = *p;
-                break;
-            }
-        }
-    }
-
-    // not enqueued
-    if (!e) {
-        events_mutex_unlock(&q->queuelock);
-        return 0;
-    }
-
-    // already waited on
-    if (e->sema) {
-        events_mutex_unlock(&q->queuelock);
-        return -1;
-    }
-
-    e->sema = &sema;
-    events_mutex_unlock(&q->queuelock);
-
-    return events_sema_wait(&sema, ms);
 }
 
 static void equeue_cancel(struct equeue *q, int id) {
@@ -223,21 +182,10 @@ void equeue_dispatch(struct equeue *q, int ms) {
                 // in event_cancel
                 equeue_requeue(q, e, e->period);
             }
-
-            q->head = e;
             events_mutex_unlock(&q->queuelock);
 
             // actually dispatch the callback
             e->cb(e + 1);
-
-            events_mutex_lock(&q->queuelock);
-            q->head = 0;
-
-            if (e->sema) {
-                events_sema_release(e->sema);
-                e->sema = 0;
-            }
-            events_mutex_unlock(&q->queuelock);
 
             if (e->period < 0) {
                 equeue_dealloc(q, e);
@@ -299,10 +247,6 @@ int event_post(struct equeue *q, void (*cb)(void*), void *p) {
     struct event *e = (struct event*)p - 1;
     e->cb = cb;
     return equeue_enqueue(q, e, e->target);
-}
-
-int event_wait(struct equeue *q, int id, int ms) {
-    return equeue_wait(q, id, ms);
 }
 
 void event_cancel(struct equeue *q, int id) {

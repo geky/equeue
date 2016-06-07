@@ -17,10 +17,9 @@ extern "C" {
 // Event/queue structures
 struct event {
     struct event *next;
+    int id;
     unsigned target;
     int period;
-    int id;
-    events_sema_t *sema;
     void (*dtor)(void *);
 
     void (*cb)(void *);
@@ -29,7 +28,6 @@ struct event {
 
 struct equeue {
     unsigned size;
-    struct event *head;
     struct event *queue;
     struct event *free;
     void *buffer;
@@ -99,13 +97,6 @@ void event_dtor(void *event, void (*dtor)(void *));
 // This call results in an unique identifier that can be passed to
 // event_wait and event_cancel.
 int event_post(struct equeue*, void (*cb)(void*), void *event);
-
-// Waits for an event to complete
-//
-// Returns a negative value if the event took longer to complete
-// than the specified time in milliseconds. A negative time will
-// wait forever.
-int event_wait(struct equeue*, int event, int ms);
 
 // Cancel events that are in flight
 //
