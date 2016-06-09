@@ -1,12 +1,19 @@
 #include "events.h"
 
 #include <stdlib.h>
+#include <stddef.h>
 
 
+// internal callback callback
 struct ecallback {
     void (*cb)(void*);
     void *data;
 };
+
+static void ecallback_dispatch(void *p) {
+    struct ecallback *e = (struct ecallback*)p;
+    e->cb(e->data);
+}
 
 // equeue functions
 static inline struct event *equeue_event(struct equeue *q, unsigned i) {
@@ -14,12 +21,18 @@ static inline struct event *equeue_event(struct equeue *q, unsigned i) {
             + i*(sizeof(struct event)+q->size));
 }
 
-int equeue_create(struct equeue *q, unsigned count, unsigned size) {
+static inline unsigned equeue_size(unsigned size) {
     if (size < sizeof(struct ecallback)) {
         size = sizeof(struct ecallback);
     }
 
-    void *buffer = malloc(count * (sizeof(struct event)+size));
+    unsigned alignment = offsetof(struct { char c; struct event e; }, e);
+    size += sizeof(struct event);
+    return (size + alignment-1) & ~(alignment-1);
+}
+
+int equeue_create(struct equeue *q, unsigned count, unsigned size) {
+    void *buffer = malloc(count * equeue_size(size));
     if (!buffer) {
         return -1;
     }
@@ -29,11 +42,7 @@ int equeue_create(struct equeue *q, unsigned count, unsigned size) {
 
 int equeue_create_inplace(struct equeue *q,
         unsigned count, unsigned size, void *buffer) {
-    if (size < sizeof(struct ecallback)) {
-        size = sizeof(struct ecallback);
-    }
-
-    q->size = size;
+    q->size = equeue_size(size);
     q->buffer = buffer;
     q->free = (struct event*)buffer;
     q->queue = 0;
@@ -257,11 +266,6 @@ void event_cancel(struct equeue *q, int id) {
 }
 
 // event helper functions
-static void ecallback_dispatch(void *p) {
-    struct ecallback *e = (struct ecallback*)p;
-    e->cb(e->data);
-}
-
 int event_call(struct equeue *q, void (*cb)(void*), void *data) {
     struct ecallback *e = event_alloc(q, sizeof(struct ecallback));
     if (!e) {
