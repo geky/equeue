@@ -61,9 +61,8 @@ void equeue_dispatch(struct equeue*, int ms);
 // event_call_in    - Post an event after a specified time in milliseconds
 // event_call_every - Post an event periodically in milliseconds
 //
-// These calls will result in a negative value if no memory is available,
-// otherwise it will result in a unique identifier that can be passed to
-// event_wait and event_cancel.
+// These calls will result in 0 if no memory is available, otherwise they
+// will result in a unique identifier that can be passed to event_cancel.
 int event_call(struct equeue*, void (*cb)(void*), void *data);
 int event_call_in(struct equeue*, void (*cb)(void*), void *data, int ms);
 int event_call_every(struct equeue*, void (*cb)(void*), void *data, int ms);
@@ -95,7 +94,7 @@ void event_dtor(void *event, void (*dtor)(void *));
 // is dispatched.
 //
 // This call results in an unique identifier that can be passed to
-// event_wait and event_cancel.
+// event_cancel.
 int event_post(struct equeue*, void (*cb)(void*), void *event);
 
 // Cancel events that are in flight
