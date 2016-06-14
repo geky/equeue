@@ -17,8 +17,7 @@ static void ecallback_dispatch(void *p) {
 
 // equeue functions
 static inline struct event *equeue_event(struct equeue *q, unsigned i) {
-    return (struct event*)((char*)q->buffer
-            + i*(sizeof(struct event)+q->size));
+    return (struct event*)((char*)q->buffer + i*q->size);
 }
 
 static inline unsigned equeue_size(unsigned size) {
@@ -221,7 +220,7 @@ void equeue_dispatch(struct equeue *q, int ms) {
 
 // event functions
 void *event_alloc(struct equeue *q, unsigned size) {
-    if (size > q->size) {
+    if (size > q->size - sizeof(struct event)) {
         return 0;
     }
 
