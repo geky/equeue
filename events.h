@@ -33,6 +33,8 @@ struct equeue {
     void *buffer;
     int next_id;
 
+    struct event break_;
+
     events_sema_t eventsema;
     events_mutex_t queuelock;
     events_mutex_t freelock;
@@ -51,6 +53,12 @@ void equeue_destroy(struct equeue*);
 // Executes any callbacks enqueued for the specified time in milliseconds,
 // or forever if ms is negative
 void equeue_dispatch(struct equeue*, int ms);
+
+// Break a running event loop
+//
+// Shuts down an unbounded event loop. Already pending events may finish executing,
+// but the queue will not continue looping indefinitely.
+void equeue_break(struct equeue*);
 
 // Simple event calls
 //
