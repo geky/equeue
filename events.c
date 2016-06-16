@@ -46,6 +46,7 @@ int equeue_create_inplace(struct equeue *q,
     q->free = (struct event*)buffer;
     q->queue = 0;
     q->next_id = 42;
+    q->break_ = (struct event){0};
 
     if (q->free) {
         for (unsigned i = 0; i < count-1; i++) {
@@ -125,7 +126,7 @@ static inline int tickdiff(unsigned a, unsigned b) {
     return (int)(a - b);
 }
 
-static int equeue_requeue(struct equeue *q, struct event *e, int ms) {
+static int equeue_enqueue(struct equeue *q, struct event *e, int ms) {
     e->target = events_tick() + (unsigned)ms;
 
     struct event **p = &q->queue;
@@ -139,25 +140,29 @@ static int equeue_requeue(struct equeue *q, struct event *e, int ms) {
     return e->id;
 }
 
-static int equeue_enqueue(struct equeue *q, struct event *e, int ms) {
+static struct event *equeue_dequeue(struct equeue *q, int id) {
+    for (struct event **p = &q->queue; *p; p = &(*p)->next) {
+        if ((*p)->id == id) {
+            struct event *e = *p;
+            *p = (*p)->next;
+            return e;
+        }
+    }
+
+    return 0;
+}
+
+static int equeue_post(struct equeue *q, struct event *e, int ms) {
     events_mutex_lock(&q->queuelock);
-    int id = equeue_requeue(q, e, ms);
+    int id = equeue_enqueue(q, e, ms);
     events_mutex_unlock(&q->queuelock);
     events_sema_release(&q->eventsema);
     return id;
 }
 
 static void equeue_cancel(struct equeue *q, int id) {
-    struct event *e = 0;
-
     events_mutex_lock(&q->queuelock);
-    for (struct event **p = &q->queue; *p; p = &(*p)->next) {
-        if ((*p)->id == id) {
-            e = *p;
-            *p = (*p)->next;
-            break;
-        }
-    }
+    struct event *e = equeue_dequeue(q, id);
     events_mutex_unlock(&q->queuelock);
 
     if (e) {
@@ -165,11 +170,18 @@ static void equeue_cancel(struct equeue *q, int id) {
     }
 }
 
+void equeue_break(struct equeue *q) {
+    equeue_post(q, &q->break_, 0);
+}
+
 void equeue_dispatch(struct equeue *q, int ms) {
-    unsigned timeout = events_tick() + (unsigned)ms;
-    int deadline = -1;
+    if (ms >= 0) {
+        equeue_post(q, &q->break_, ms);
+    }
 
     while (1) {
+        int deadline = -1;
+
         while (q->queue) {
             deadline = -1;
 
@@ -191,9 +203,13 @@ void equeue_dispatch(struct equeue *q, int ms) {
             if (e->period >= 0) {
                 // requeue periodic tasks to avoid race conditions
                 // in event_cancel
-                equeue_requeue(q, e, e->period);
+                equeue_enqueue(q, e, e->period);
             }
             events_mutex_unlock(&q->queuelock);
+
+            if (e == &q->break_) {
+                return;
+            }
 
             // actually dispatch the callback
             e->cb(e + 1);
@@ -203,18 +219,7 @@ void equeue_dispatch(struct equeue *q, int ms) {
             }
         }
 
-        if (ms >= 0) {
-            int nms = tickdiff(timeout, events_tick());
-            if ((unsigned)nms < (unsigned)deadline) {
-                deadline = nms;
-            }
-        }
-
         events_sema_wait(&q->eventsema, deadline);
-
-        if (ms >= 0 && tickdiff(timeout, events_tick()) <= 0) {
-            return;
-        }
     }
 }
 
@@ -257,7 +262,8 @@ void event_dtor(void *p, void (*dtor)(void *)) {
 int event_post(struct equeue *q, void (*cb)(void*), void *p) {
     struct event *e = (struct event*)p - 1;
     e->cb = cb;
-    return equeue_enqueue(q, e, e->target);
+    int id = equeue_post(q, e, e->target);
+    return id;
 }
 
 void event_cancel(struct equeue *q, int id) {
