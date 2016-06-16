@@ -46,7 +46,10 @@ int equeue_create_inplace(struct equeue *q,
     q->free = (struct event*)buffer;
     q->queue = 0;
     q->next_id = 42;
-    q->break_ = (struct event){0};
+    q->break_ = (struct event){
+        .id = 0,
+        .period = -1,
+    };
 
     if (q->free) {
         for (unsigned i = 0; i < count-1; i++) {
