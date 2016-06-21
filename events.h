@@ -14,8 +14,12 @@ extern "C" {
 #include "sys/events_sema.h"
 
 
+// Number of free-chunk lists per equeue
+#define EVENT_CHUNK_LISTS 4
+
 // Event/queue structures
 struct event {
+    unsigned size;
     struct event *next;
     int id;
     unsigned target;
@@ -27,11 +31,15 @@ struct event {
 };
 
 struct equeue {
-    unsigned size;
     struct event *queue;
-    struct event *free;
-    void *buffer;
     int next_id;
+
+    void *buffer;
+    struct event *chunks[EVENT_CHUNK_LISTS];
+    struct {
+        unsigned size;
+        unsigned char *data;
+    } slab;
 
     struct event break_;
 
@@ -43,9 +51,8 @@ struct equeue {
 // Queue operations
 //
 // Creation results in negative value on failure.
-int equeue_create(struct equeue*, unsigned count, unsigned size);
-int equeue_create_inplace(struct equeue*,
-        unsigned count, unsigned size, void *buffer);
+int equeue_create(struct equeue*, unsigned size);
+int equeue_create_inplace(struct equeue*, unsigned size, void *buffer);
 void equeue_destroy(struct equeue*);
 
 // Dispatch events
