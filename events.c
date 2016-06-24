@@ -1,7 +1,6 @@
 #include "events.h"
 
 #include <stdlib.h>
-#include <stddef.h>
 #include <string.h>
 
 
@@ -19,7 +18,7 @@ int equeue_create(struct equeue *q, unsigned size) {
 int equeue_create_inplace(struct equeue *q, unsigned size, void *buffer) {
     q->slab.size = size;
     q->slab.data = buffer;
-    memset(q->chunks, 0, EVENT_CHUNK_LISTS*sizeof(struct event*));
+    q->chunks = 0;
     q->buffer = 0;
 
     q->queue = 0;
@@ -56,53 +55,61 @@ void equeue_destroy(struct equeue *q) {
 }
 
 // equeue allocation functions
-static inline unsigned equeue_size(unsigned size) {
-    size += sizeof(struct event);
-    unsigned alignment = offsetof(struct { char c; struct event e; }, e);
-    return (size + alignment-1) & ~(alignment-1);
-}
-
-static struct event *equeue_alloc(struct equeue *q, unsigned size) {
-    size = equeue_size(size);
+static void *equeue_alloc(struct equeue *q, unsigned size) {
+    size = size + sizeof(unsigned);
+    size = (size + sizeof(unsigned)-1) & ~(sizeof(unsigned)-1);
+    if (size < sizeof(struct equeue_chunk)) {
+        size = sizeof(struct equeue_chunk);
+    }
 
     events_mutex_lock(&q->freelock);
 
-    for (int i = 0; i < EVENT_CHUNK_LISTS; i++) {
-        if (q->chunks[i] && q->chunks[i]->size >= size) {
-            struct event *e = q->chunks[i];
-            q->chunks[i] = e->next;
+    for (struct equeue_chunk **p = &q->chunks; *p; p = &(*p)->nchunk) {
+        if ((*p)->size >= size) {
+            struct equeue_chunk *c = *p;
+            if (c->next) {
+                *p = c->next;
+                (*p)->nchunk = c->nchunk;
+            } else {
+                *p = c->nchunk;
+            }
             events_mutex_unlock(&q->freelock);
-            return e;
+            return (unsigned *)c + 1;
         }
     }
 
     if (q->slab.size >= size) {
-        struct event *e = (struct event *)q->slab.data;
+        struct equeue_chunk *c = (struct equeue_chunk *)q->slab.data;
         q->slab.data += size;
         q->slab.size -= size;
-        e->size = size;
+        c->size = size;
         events_mutex_unlock(&q->freelock);
-        return e;
+        return (unsigned *)c + 1;
     }
 
     events_mutex_unlock(&q->freelock);
     return 0;
 }
 
-static void equeue_dealloc(struct equeue *q, struct event *e) {
-    int i = 0;
+static void equeue_dealloc(struct equeue *q, void *e) {
+    struct equeue_chunk *c = (struct equeue_chunk *)((unsigned *)e - 1);
 
     events_mutex_lock(&q->freelock);
 
-    for (; i < EVENT_CHUNK_LISTS-1; i++) {
-        if (q->chunks[i+1] && q->chunks[i+1]->size >= e->size) {
-            break;
-        }
+    struct equeue_chunk **p = &q->chunks;
+    while (*p && (*p)->size < c->size) {
+        p = &(*p)->nchunk;
     }
 
-    e->next = q->chunks[i];
-    q->chunks[i] = e;
-
+    if (*p && (*p)->size == c->size) {
+        c->next = *p;
+        c->nchunk = (*p)->nchunk;
+    } else {
+        c->next = 0;
+        c->nchunk = *p;
+    }
+    *p = c;
+    
     events_mutex_unlock(&q->freelock);
 }
 
@@ -116,7 +123,7 @@ static inline int event_next_id(struct equeue *q) {
 }
 
 void *event_alloc(struct equeue *q, unsigned size) {
-    struct event *e = equeue_alloc(q, size);
+    struct event *e = equeue_alloc(q, sizeof(struct event) + size);
     if (!e) {
         return 0;
     }
