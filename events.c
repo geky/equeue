@@ -48,6 +48,12 @@ int equeue_create_inplace(struct equeue *q, unsigned size, void *buffer) {
 }
 
 void equeue_destroy(struct equeue *q) {
+    while (q->queue) {
+        struct event *e = q->queue;
+        q->queue = e->next;
+        event_dealloc(q, e+1);
+    }
+
     events_mutex_destroy(&q->freelock);
     events_mutex_destroy(&q->queuelock);
     events_sema_destroy(&q->eventsema);
