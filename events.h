@@ -27,11 +27,19 @@ struct event {
 };
 
 struct equeue {
-    unsigned size;
     struct event *queue;
-    struct event *free;
-    void *buffer;
     int next_id;
+
+    void *buffer;
+    struct equeue_chunk {
+        unsigned size;
+        struct equeue_chunk *next;
+        struct equeue_chunk *nchunk;
+    } *chunks;
+    struct equeue_slab {
+        unsigned size;
+        unsigned char *data;
+    } slab;
 
     struct event break_;
 
@@ -43,9 +51,8 @@ struct equeue {
 // Queue operations
 //
 // Creation results in negative value on failure.
-int equeue_create(struct equeue*, unsigned count, unsigned size);
-int equeue_create_inplace(struct equeue*,
-        unsigned count, unsigned size, void *buffer);
+int equeue_create(struct equeue*, unsigned size);
+int equeue_create_inplace(struct equeue*, unsigned size, void *buffer);
 void equeue_destroy(struct equeue*);
 
 // Dispatch events
