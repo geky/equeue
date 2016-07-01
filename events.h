@@ -26,7 +26,7 @@ struct event {
     // data follows
 };
 
-struct equeue {
+typedef struct equeue {
     struct event *queue;
     int next_id;
 
@@ -46,26 +46,26 @@ struct equeue {
     events_sema_t eventsema;
     events_mutex_t queuelock;
     events_mutex_t freelock;
-};
+} equeue_t;
 
 // Queue operations
 //
 // Creation results in negative value on failure.
-int equeue_create(struct equeue*, unsigned size);
-int equeue_create_inplace(struct equeue*, unsigned size, void *buffer);
-void equeue_destroy(struct equeue*);
+int equeue_create(equeue_t*, unsigned size);
+int equeue_create_inplace(equeue_t*, unsigned size, void *buffer);
+void equeue_destroy(equeue_t*);
 
 // Dispatch events
 //
 // Executes any callbacks enqueued for the specified time in milliseconds,
 // or forever if ms is negative
-void equeue_dispatch(struct equeue*, int ms);
+void equeue_dispatch(equeue_t*, int ms);
 
 // Break a running event loop
 //
 // Shuts down an unbounded event loop. Already pending events may finish executing,
 // but the queue will not continue looping indefinitely.
-void equeue_break(struct equeue*);
+void equeue_break(equeue_t*);
 
 // Simple event calls
 //
@@ -78,9 +78,9 @@ void equeue_break(struct equeue*);
 //
 // These calls will result in 0 if no memory is available, otherwise they
 // will result in a unique identifier that can be passed to event_cancel.
-int event_call(struct equeue*, void (*cb)(void*), void *data);
-int event_call_in(struct equeue*, void (*cb)(void*), void *data, int ms);
-int event_call_every(struct equeue*, void (*cb)(void*), void *data, int ms);
+int event_call(equeue_t*, void (*cb)(void*), void *data);
+int event_call_in(equeue_t*, void (*cb)(void*), void *data, int ms);
+int event_call_every(equeue_t*, void (*cb)(void*), void *data, int ms);
 
 // Events with queue handled blocks of memory
 //
@@ -90,8 +90,8 @@ int event_call_every(struct equeue*, void (*cb)(void*), void *data, int ms);
 //
 // event_alloc will result in null if no memory is available
 // or the requested size is less than the size passed to equeue_create.
-void *event_alloc(struct equeue*, unsigned size);
-void event_dealloc(struct equeue*, void*);
+void *event_alloc(equeue_t*, unsigned size);
+void event_dealloc(equeue_t*, void*);
 
 // Configure an allocated event
 // 
@@ -110,7 +110,7 @@ void event_dtor(void *event, void (*dtor)(void *));
 //
 // This call results in an unique identifier that can be passed to
 // event_cancel.
-int event_post(struct equeue*, void (*cb)(void*), void *event);
+int event_post(equeue_t*, void (*cb)(void*), void *event);
 
 // Cancel events that are in flight
 //
@@ -118,7 +118,7 @@ int event_post(struct equeue*, void (*cb)(void*), void *event);
 // that can be used to cancel an in-flight event. If the event has already
 // been dispatched or does not exist, no error occurs. Note, this can not
 // stop a currently executing event
-void event_cancel(struct equeue*, int event);
+void event_cancel(equeue_t*, int event);
 
 
 #ifdef __cplusplus

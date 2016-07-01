@@ -67,7 +67,7 @@ void timing_func(void *p) {
 }
 
 struct fragment {
-    struct equeue *q;
+    equeue_t *q;
     unsigned size;
     struct timing timing;
 };
@@ -89,7 +89,7 @@ void fragment_func(void *p) {
 
 // Simple call tests
 void simple_call_test(void) {
-    struct equeue q;
+    equeue_t q;
     int err = equeue_create(&q, 2048);
     test_assert(!err);
 
@@ -102,7 +102,7 @@ void simple_call_test(void) {
 }
 
 void simple_call_in_test(void) {
-    struct equeue q;
+    equeue_t q;
     int err = equeue_create(&q, 2048);
     test_assert(!err);
 
@@ -117,7 +117,7 @@ void simple_call_in_test(void) {
 }
 
 void simple_call_every_test(void) {
-    struct equeue q;
+    equeue_t q;
     int err = equeue_create(&q, 2048);
     test_assert(!err);
 
@@ -132,7 +132,7 @@ void simple_call_every_test(void) {
 }
 
 void simple_post_test(void) {
-    struct equeue q;
+    equeue_t q;
     int err = equeue_create(&q, 2048);
     test_assert(!err);
 
@@ -152,7 +152,7 @@ void simple_post_test(void) {
 
 // Misc tests
 void destructor_test(void) {
-    struct equeue q;
+    equeue_t q;
     int err = equeue_create(&q, 2048);
     test_assert(!err);
 
@@ -182,7 +182,7 @@ void destructor_test(void) {
 }
 
 void allocation_failure_test(void) {
-    struct equeue q;
+    equeue_t q;
     int err = equeue_create(&q, 2048);
     test_assert(!err);
 
@@ -198,7 +198,7 @@ void allocation_failure_test(void) {
 }
 
 void cancel_test(int N) {
-    struct equeue q;
+    equeue_t q;
     int err = equeue_create(&q, 2048);
     test_assert(!err);
 
@@ -222,7 +222,7 @@ void cancel_test(int N) {
 }
 
 void loop_protect_test(void) {
-    struct equeue q;
+    equeue_t q;
     int err = equeue_create(&q, 2048);
     test_assert(!err);
 
@@ -242,7 +242,7 @@ void loop_protect_test(void) {
 }
 
 void break_test(void) {
-    struct equeue q;
+    equeue_t q;
     int err = equeue_create(&q, 2048);
     test_assert(!err);
 
@@ -258,7 +258,7 @@ void break_test(void) {
 
 // Barrage tests
 void simple_barrage_test(int N) {
-    struct equeue q;
+    equeue_t q;
     int err = equeue_create(&q, N * 56);
     test_assert(!err);
 
@@ -281,7 +281,7 @@ void simple_barrage_test(int N) {
 }
 
 void fragmenting_barrage_test(int N) {
-    struct equeue q;
+    equeue_t q;
     int err = equeue_create(&q, N * 1000);
     test_assert(!err);
 
@@ -307,7 +307,7 @@ void fragmenting_barrage_test(int N) {
 
 struct ethread {
     pthread_t thread;
-    struct equeue *q;
+    equeue_t *q;
     int ms;
 };
 
@@ -318,7 +318,7 @@ static void *ethread_dispatch(void *p) {
 }
 
 void multithreaded_barrage_test(int N) {
-    struct equeue q;
+    equeue_t q;
     int err = equeue_create(&q, N * 56);
     test_assert(!err);
 
