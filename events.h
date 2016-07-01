@@ -9,9 +9,9 @@ extern "C" {
 #endif
 
 // System specific files
-#include "sys/events_tick.h"
-#include "sys/events_mutex.h"
-#include "sys/events_sema.h"
+#include "events_tick.h"
+#include "events_mutex.h"
+#include "events_sema.h"
 
 
 // Event/queue structures

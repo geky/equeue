@@ -15,7 +15,20 @@ extern "C" {
 //
 // Optimal implementation is a binary semaphore,
 // however a regular semaphore is sufficient.
+#if defined(__unix__)
+#include <pthread.h>
+typedef struct {
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+} events_sema_t;
+#elif defined(__MBED__)
+#ifdef MBED_CONF_RTOS_PRESENT
+typedef void *events_sema_t;
+#else
 typedef struct {} events_sema_t;
+#endif
+#endif
+
 
 // Semaphore operations
 int events_sema_create(events_sema_t *s);

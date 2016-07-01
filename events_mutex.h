@@ -14,7 +14,13 @@ extern "C" {
 // If this type is safe in interrupt contexts, then
 // the associated event queue will also be safe in
 // interrupt contexts.
-typedef struct {} events_mutex_t;
+#if defined(__unix__)
+#include <pthread.h>
+typedef pthread_mutex_t events_mutex_t;
+#elif defined(__MBED__)
+typedef unsigned events_mutex_t;
+#endif
+
 
 // Mutex operations
 int events_mutex_create(events_mutex_t *m);
