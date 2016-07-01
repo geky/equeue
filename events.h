@@ -79,8 +79,8 @@ void equeue_break(equeue_t *queue);
 // These calls will result in 0 if no memory is available, otherwise they
 // will result in a unique identifier that can be passed to event_cancel.
 int event_call(equeue_t *queue, void (*cb)(void *), void *data);
-int event_call_in(equeue_t *queue, void (*cb)(void *), void *data, int ms);
-int event_call_every(equeue_t *queue, void (*cb)(void *), void *data, int ms);
+int event_call_in(equeue_t *queue, int ms, void (*cb)(void *), void *data);
+int event_call_every(equeue_t *queue, int ms, void (*cb)(void *), void *data);
 
 // Events with queue handled blocks of memory
 //

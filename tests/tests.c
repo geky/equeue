@@ -107,7 +107,7 @@ void simple_call_in_test(void) {
     test_assert(!err);
 
     bool touched = false;
-    int id = event_call_in(&q, simple_func, &touched, 5);
+    int id = event_call_in(&q, 5, simple_func, &touched);
     test_assert(id);
 
     equeue_dispatch(&q, 10);
@@ -122,7 +122,7 @@ void simple_call_every_test(void) {
     test_assert(!err);
 
     bool touched = false;
-    int id = event_call_every(&q, simple_func, &touched, 5);
+    int id = event_call_every(&q, 5, simple_func, &touched);
     test_assert(id);
 
     equeue_dispatch(&q, 10);
@@ -227,13 +227,13 @@ void loop_protect_test(void) {
     test_assert(!err);
 
     bool touched = false;
-    event_call_every(&q, simple_func, &touched, 0);
+    event_call_every(&q, 0, simple_func, &touched);
 
     equeue_dispatch(&q, 0);
     test_assert(touched);
 
     touched = false;
-    event_call_every(&q, simple_func, &touched, 1);
+    event_call_every(&q, 1, simple_func, &touched);
 
     equeue_dispatch(&q, 0);
     test_assert(touched);
@@ -247,7 +247,7 @@ void break_test(void) {
     test_assert(!err);
 
     bool touched = false;
-    event_call_every(&q, simple_func, &touched, 0);
+    event_call_every(&q, 0, simple_func, &touched);
 
     equeue_break(&q);
     equeue_dispatch(&q, -1);

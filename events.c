@@ -304,7 +304,7 @@ int event_call(equeue_t *q, void (*cb)(void*), void *data) {
     return event_post(q, ecallback_dispatch, e);
 }
 
-int event_call_in(equeue_t *q, void (*cb)(void*), void *data, int ms) {
+int event_call_in(equeue_t *q, int ms, void (*cb)(void*), void *data) {
     struct ecallback *e = event_alloc(q, sizeof(struct ecallback));
     if (!e) {
         return 0;
@@ -316,7 +316,7 @@ int event_call_in(equeue_t *q, void (*cb)(void*), void *data, int ms) {
     return event_post(q, ecallback_dispatch, e);
 }
 
-int event_call_every(equeue_t *q, void (*cb)(void*), void *data, int ms) {
+int event_call_every(equeue_t *q, int ms, void (*cb)(void*), void *data) {
     struct ecallback *e = event_alloc(q, sizeof(struct ecallback));
     if (!e) {
         return 0;
