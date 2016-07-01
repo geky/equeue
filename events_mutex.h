@@ -23,10 +23,10 @@ typedef unsigned events_mutex_t;
 
 
 // Mutex operations
-int events_mutex_create(events_mutex_t *m);
-void events_mutex_destroy(events_mutex_t *m);
-void events_mutex_lock(events_mutex_t *m);
-void events_mutex_unlock(events_mutex_t *m);
+int events_mutex_create(events_mutex_t *mutex);
+void events_mutex_destroy(events_mutex_t *mutex);
+void events_mutex_lock(events_mutex_t *mutex);
+void events_mutex_unlock(events_mutex_t *mutex);
 
 
 #ifdef __cplusplus
