@@ -1,6 +1,2 @@
 script:
-    - git config user.email "test"
-    - git config user.name "test"
-    - git fetch origin posix:posix
-    - git merge posix --no-commit
     - make test

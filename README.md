@@ -14,7 +14,7 @@ void print(void *s) {
 
 int main() {
     // creates a queue with 32 events with default size
-    struct equeue queue;
+    equeue_t queue;
     equeue_create(&queue, 32, 0);
 
     // events are simple callbacks

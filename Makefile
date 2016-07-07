@@ -1,14 +1,18 @@
 TARGET = libevents.a
 
-
 CC = gcc
 AR = ar
 SIZE = size
 
-SRC += $(wildcard *.c sys/*.c)
+SRC += $(wildcard *.c)
 OBJ := $(SRC:.c=.o)
 DEP := $(SRC:.c=.d)
 ASM := $(SRC:.c=.s)
+
+TESTS = tests/tests
+TSRC += $(wildcard tests/*.c)
+TOBJ := $(TSRC:.c=.o)
+TDEP := $(TSRC:.c=.d)
 
 ifdef DEBUG
 CFLAGS += -O0 -g3 -DMU_DEBUG
@@ -19,15 +23,19 @@ endif
 ifdef WORD
 CFLAGS += -m$(WORD)
 endif
+CFLAGS += -I.
 CFLAGS += -std=c99
 CFLAGS += -Wall -Winline
-CFLAGS += -D_POSIX_C_SOURCE=200112L
+CFLAGS += -D_XOPEN_SOURCE=500
 
 LFLAGS += -lpthread
-LFLAGS += -lrt
 
 
 all: $(TARGET)
+
+test: $(TOBJ) $(OBJ)
+	$(CC) $(CFLAGS) $^ $(LFLAGS) -o $(TESTS)
+	$(TESTS)
 
 asm: $(ASM)
 
@@ -47,6 +55,8 @@ size: $(OBJ)
 
 clean:
 	rm -f $(TARGET)
+	rm -f $(TESTS)
+	rm -f $(TOBJ) $(TDEP)
 	rm -f $(OBJ)
 	rm -f $(DEP)
 	rm -f $(ASM)
