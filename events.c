@@ -157,8 +157,8 @@ static inline int equeue_tickdiff(unsigned a, unsigned b) {
     return (int)(a - b);
 }
 
-static int equeue_enqueue(equeue_t *q, struct event *e, int ms) {
-    e->target = events_tick() + (unsigned)ms;
+static void equeue_enqueue(equeue_t *q, struct event *e, unsigned ms) {
+    e->target = events_tick() + ms;
 
     struct event **p = &q->queue;
     while (*p && equeue_tickdiff((*p)->target, e->target) <= 0) {
@@ -167,8 +167,6 @@ static int equeue_enqueue(equeue_t *q, struct event *e, int ms) {
     
     e->next = *p;
     *p = e;
-
-    return e->id;
 }
 
 static struct event *equeue_dequeue(equeue_t *q, int id) {
@@ -184,9 +182,16 @@ static struct event *equeue_dequeue(equeue_t *q, int id) {
 }
 
 static int equeue_post(equeue_t *q, struct event *e, int ms) {
+    int id = e->id;
+    if (ms < 0) {
+        event_dealloc(q, e+1);
+        return id;
+    }
+
     events_mutex_lock(&q->queuelock);
-    int id = equeue_enqueue(q, e, ms);
+    equeue_enqueue(q, e, ms);
     events_mutex_unlock(&q->queuelock);
+
     events_sema_release(&q->eventsema);
     return id;
 }
