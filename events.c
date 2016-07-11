@@ -284,7 +284,7 @@ int event_post(equeue_t *q, void (*cb)(void*), void *p) {
 }
 
 void event_cancel(equeue_t *q, int id) {
-    return equeue_cancel(q, id);
+    equeue_cancel(q, id);
 }
 
 // simple callbacks 
