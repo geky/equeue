@@ -10,8 +10,7 @@ DEP := $(SRC:.c=.d)
 ASM := $(SRC:.c=.s)
 
 ifdef DEBUG
-CFLAGS += -O0 -g3 -DMU_DEBUG
-CFLAGS += -fkeep-inline-functions
+CFLAGS += -O0 -g3
 else
 CFLAGS += -O2
 endif
@@ -20,7 +19,7 @@ CFLAGS += -m$(WORD)
 endif
 CFLAGS += -I.
 CFLAGS += -std=c99
-CFLAGS += -Wall -Winline
+CFLAGS += -Wall
 CFLAGS += -D_XOPEN_SOURCE=500
 
 LFLAGS += -lpthread
