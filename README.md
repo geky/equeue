@@ -37,13 +37,32 @@ supports multithreaded environments. More information on the idea
 behind composable event loops 
 [here](https://gist.github.com/geky/4969d940f1bd5596bdc10e79093e2553).
 
+## Tests ##
+
+The events library uses a set of local tests based on the posix implementation.
+
+Runtime tests are located in [tests.c](tests/tests.c):
+
+``` bash
+make test
+```
+
+Profiling tests based on rdtsc are located in [prof.c](tests/prof.c):
+
+``` bash
+make prof
+```
+
+To make profiling results more tangible, the profiler also supports percentage
+comparison with previous runs:
+``` bash
+make prof | tee results.txt
+cat results.txt | make prof
+```
+
 ## Porting ##
 
-The events library only requires the following:
-- monotonic counter
-- non-recursive mutex
-- binary semaphore
-
-Supported implementations are hosted as branches on this repo:
-- Posix
-- mbed
+The events library requires a small porting layer:
+- [events_tick](events_tick.h) - monotonic counter
+- [events_mutex](events_mutex.h) - non-recursive mutex
+- [events_sema](events_sema.h) - binary semaphore
