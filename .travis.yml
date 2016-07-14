@@ -1,3 +1,15 @@
 script:
+      # Strict compilation of library
     - CFLAGS='-pedantic -Werror' make
+
+      # Runtime tests
     - make test
+
+      # Relative profiling with current master
+    - if ( git clone https://github.com/geky/events tests/master &&
+           make -s -C tests/master prof | tee tests/results.txt ) ;
+      then
+        cat tests/results.txt | make prof ; 
+      else
+        make prof ;
+      fi
