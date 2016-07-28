@@ -20,7 +20,7 @@ endif
 CFLAGS += -I.
 CFLAGS += -std=c99
 CFLAGS += -Wall
-CFLAGS += -D_XOPEN_SOURCE=500
+CFLAGS += -D_XOPEN_SOURCE=600
 
 LFLAGS += -lpthread
 
