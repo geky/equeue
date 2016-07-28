@@ -11,27 +11,15 @@
 #include "events_mutex.h"
 
 #include <time.h>
+#include <sys/time.h>
 
 
 // Tick operations
-#ifdef _POSIX_TIMERS
-
-unsigned events_tick(void) {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (unsigned)(ts.tv_sec*1000 + ts.tv_nsec/1000000);
-}
-
-#else
-#include <sys/time.h>
-
 unsigned events_tick(void) {
     struct timeval tv;
     gettimeofday(&tv, 0);
     return (unsigned)(tv.tv_sec*1000 + tv.tv_usec/1000);
 }
-
-#endif
 
 
 // Mutex operations
