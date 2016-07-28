@@ -265,7 +265,7 @@ void break_test(void) {
 // Barrage tests
 void simple_barrage_test(int N) {
     equeue_t q;
-    int err = equeue_create(&q, N * 56);
+    int err = equeue_create(&q, N*(EVENTS_EVENT_SIZE+sizeof(struct timing)));
     test_assert(!err);
 
     for (int i = 0; i < N; i++) {
@@ -288,7 +288,8 @@ void simple_barrage_test(int N) {
 
 void fragmenting_barrage_test(int N) {
     equeue_t q;
-    int err = equeue_create(&q, N * 1000);
+    int err = equeue_create(&q,
+            2*N*(EVENTS_EVENT_SIZE+sizeof(struct fragment)+N*sizeof(int)));
     test_assert(!err);
 
     for (int i = 0; i < N; i++) {
@@ -325,7 +326,7 @@ static void *ethread_dispatch(void *p) {
 
 void multithreaded_barrage_test(int N) {
     equeue_t q;
-    int err = equeue_create(&q, N * 56);
+    int err = equeue_create(&q, N*(EVENTS_EVENT_SIZE+sizeof(struct timing)));
     test_assert(!err);
 
     struct ethread t;

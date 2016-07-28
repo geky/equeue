@@ -17,6 +17,10 @@ extern "C" {
 #include "events_sema.h"
 
 
+// Definition of the minimum size of an event
+// This size fits the events created in the event_call set of functions.
+#define EVENTS_EVENT_SIZE (sizeof(struct event) + 3*sizeof(void*))
+
 // Event/queue structures
 struct event {
     struct event *next;
@@ -50,6 +54,7 @@ typedef struct equeue {
     events_mutex_t queuelock;
     events_mutex_t freelock;
 } equeue_t;
+
 
 // Queue operations
 //
