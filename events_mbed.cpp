@@ -1,3 +1,10 @@
+/*
+ * Implementation for the mbed library
+ * https://github.com/mbedmicro/mbed
+ *
+ * Copyright (c) 2016 Christopher Haster
+ * Distributed under the MIT license
+ */
 #if defined(__MBED__)
 
 #include "events_tick.h"

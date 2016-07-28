@@ -1,5 +1,8 @@
 /* 
  * System specific tick implementation
+ *
+ * Copyright (c) 2016 Christopher Haster
+ * Distributed under the MIT license
  */
 #ifndef EVENTS_TICK_H
 #define EVENTS_TICK_H

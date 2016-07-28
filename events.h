@@ -1,5 +1,8 @@
 /* 
  * Flexible event queue for dispatching events
+ *
+ * Copyright (c) 2016 Christopher Haster
+ * Distributed under the MIT license
  */
 #ifndef EVENTS_H
 #define EVENTS_H

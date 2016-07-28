@@ -1,3 +1,9 @@
+/*
+ * Implementation for Posix compliant platforms
+ *
+ * Copyright (c) 2016 Christopher Haster
+ * Distributed under the MIT license
+ */
 #if defined(__unix__)
 
 #include "events_tick.h"

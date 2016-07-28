@@ -1,3 +1,9 @@
+/*
+ * Testing framework for the events library
+ *
+ * Copyright (c) 2016 Christopher Haster
+ * Distributed under the MIT license
+ */
 #include "events.h"
 #include <unistd.h>
 #include <stdio.h>
