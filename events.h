@@ -80,26 +80,26 @@ void equeue_break(equeue_t *queue);
 // Passed callback will be executed in the associated equeue's
 // dispatch call with the data pointer passed unmodified
 //
-// event_call       - Immediately post an event to the queue
-// event_call_in    - Post an event after a specified time in milliseconds
-// event_call_every - Post an event periodically in milliseconds
+// equeue_call       - Immediately post an event to the queue
+// equeue_call_in    - Post an event after a specified time in milliseconds
+// equeue_call_every - Post an event periodically in milliseconds
 //
 // These calls will result in 0 if no memory is available, otherwise they
-// will result in a unique identifier that can be passed to event_cancel.
-int event_call(equeue_t *queue, void (*cb)(void *), void *data);
-int event_call_in(equeue_t *queue, int ms, void (*cb)(void *), void *data);
-int event_call_every(equeue_t *queue, int ms, void (*cb)(void *), void *data);
+// will result in a unique identifier that can be passed to equeue_cancel.
+int equeue_call(equeue_t *queue, void (*cb)(void *), void *data);
+int equeue_call_in(equeue_t *queue, int ms, void (*cb)(void *), void *data);
+int equeue_call_every(equeue_t *queue, int ms, void (*cb)(void *), void *data);
 
 // Events with queue handled blocks of memory
 //
-// Argument to event_post must point to a result of a event_alloc call
+// Argument to equeue_post must point to a result of a equeue_alloc call
 // and the associated memory is automatically freed after the event
 // is dispatched.
 //
-// event_alloc will result in null if no memory is available
+// equeue_alloc will result in null if no memory is available
 // or the requested size is less than the size passed to equeue_create.
-void *event_alloc(equeue_t *queue, unsigned size);
-void event_dealloc(equeue_t *queue, void *event);
+void *equeue_alloc(equeue_t *queue, unsigned size);
+void equeue_dealloc(equeue_t *queue, void *event);
 
 // Configure an allocated event
 // 
@@ -112,21 +112,21 @@ void event_dtor(void *event, void (*dtor)(void *));
 
 // Post an allocted event to the event queue
 //
-// Argument to event_post must point to a result of a event_alloc call
+// Argument to equeue_post must point to a result of a equeue_alloc call
 // and the associated memory is automatically freed after the event
 // is dispatched.
 //
 // This call results in an unique identifier that can be passed to
-// event_cancel.
-int event_post(equeue_t *queue, void (*cb)(void *), void *event);
+// equeue_cancel.
+int equeue_post(equeue_t *queue, void (*cb)(void *), void *event);
 
 // Cancel events that are in flight
 //
-// Every event_call function returns a non-negative identifier on success
+// Every equeue_call function returns a non-negative identifier on success
 // that can be used to cancel an in-flight event. If the event has already
 // been dispatched or does not exist, no error occurs. Note, this can not
 // stop a currently executing event
-void event_cancel(equeue_t *queue, int event);
+void equeue_cancel(equeue_t *queue, int event);
 
 
 #ifdef __cplusplus

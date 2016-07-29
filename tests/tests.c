@@ -82,13 +82,13 @@ void fragment_func(void *p) {
     struct fragment *fragment = (struct fragment*)p;
     timing_func(&fragment->timing);
 
-    struct fragment *nfragment = event_alloc(fragment->q, fragment->size);
+    struct fragment *nfragment = equeue_alloc(fragment->q, fragment->size);
     test_assert(nfragment);
 
     *nfragment = *fragment;
     event_delay(nfragment, fragment->timing.delay);
 
-    int id = event_post(nfragment->q, fragment_func, nfragment);
+    int id = equeue_post(nfragment->q, fragment_func, nfragment);
     test_assert(id);
 }
 
@@ -100,7 +100,7 @@ void simple_call_test(void) {
     test_assert(!err);
 
     bool touched = false;
-    event_call(&q, simple_func, &touched);
+    equeue_call(&q, simple_func, &touched);
     equeue_dispatch(&q, 0);
     test_assert(touched);
 
@@ -113,7 +113,7 @@ void simple_call_in_test(void) {
     test_assert(!err);
 
     bool touched = false;
-    int id = event_call_in(&q, 5, simple_func, &touched);
+    int id = equeue_call_in(&q, 5, simple_func, &touched);
     test_assert(id);
 
     equeue_dispatch(&q, 10);
@@ -128,7 +128,7 @@ void simple_call_every_test(void) {
     test_assert(!err);
 
     bool touched = false;
-    int id = event_call_every(&q, 5, simple_func, &touched);
+    int id = equeue_call_every(&q, 5, simple_func, &touched);
     test_assert(id);
 
     equeue_dispatch(&q, 10);
@@ -143,11 +143,11 @@ void simple_post_test(void) {
     test_assert(!err);
 
     bool touched = false;
-    struct indirect *i = event_alloc(&q, sizeof(struct indirect));
+    struct indirect *i = equeue_alloc(&q, sizeof(struct indirect));
     test_assert(i);
 
     i->touched = &touched;
-    int id = event_post(&q, indirect_func, i);
+    int id = equeue_post(&q, indirect_func, i);
     test_assert(id);
 
     equeue_dispatch(&q, 0);
@@ -163,24 +163,24 @@ void destructor_test(void) {
     test_assert(!err);
 
     bool touched = false;
-    struct indirect *i = event_alloc(&q, sizeof(struct indirect));
+    struct indirect *i = equeue_alloc(&q, sizeof(struct indirect));
     test_assert(i);
 
     i->touched = &touched;
     event_dtor(i, indirect_func);
-    int id = event_post(&q, pass_func, i);
+    int id = equeue_post(&q, pass_func, i);
     test_assert(id);
 
     equeue_dispatch(&q, 0);
     test_assert(touched);
 
     touched = false;
-    i = event_alloc(&q, sizeof(struct indirect));
+    i = equeue_alloc(&q, sizeof(struct indirect));
     test_assert(i);
 
     i->touched = &touched;
     event_dtor(i, indirect_func);
-    id = event_post(&q, pass_func, i);
+    id = equeue_post(&q, pass_func, i);
     test_assert(id);
 
     equeue_destroy(&q);
@@ -192,11 +192,11 @@ void allocation_failure_test(void) {
     int err = equeue_create(&q, 2048);
     test_assert(!err);
 
-    void *p = event_alloc(&q, 4096);
+    void *p = equeue_alloc(&q, 4096);
     test_assert(!p);
 
     for (int i = 0; i < 100; i++) {
-        p = event_alloc(&q, 0);
+        p = equeue_alloc(&q, 0);
     }
     test_assert(!p);
 
@@ -212,11 +212,11 @@ void cancel_test(int N) {
     int *ids = malloc(N*sizeof(int));
 
     for (int i = 0; i < N; i++) {
-        ids[i] = event_call(&q, simple_func, &touched);
+        ids[i] = equeue_call(&q, simple_func, &touched);
     }
 
     for (int i = N-1; i >= 0; i--) {
-        event_cancel(&q, ids[i]);
+        equeue_cancel(&q, ids[i]);
     }
 
     free(ids);
@@ -233,13 +233,13 @@ void loop_protect_test(void) {
     test_assert(!err);
 
     bool touched = false;
-    event_call_every(&q, 0, simple_func, &touched);
+    equeue_call_every(&q, 0, simple_func, &touched);
 
     equeue_dispatch(&q, 0);
     test_assert(touched);
 
     touched = false;
-    event_call_every(&q, 1, simple_func, &touched);
+    equeue_call_every(&q, 1, simple_func, &touched);
 
     equeue_dispatch(&q, 0);
     test_assert(touched);
@@ -253,7 +253,7 @@ void break_test(void) {
     test_assert(!err);
 
     bool touched = false;
-    event_call_every(&q, 0, simple_func, &touched);
+    equeue_call_every(&q, 0, simple_func, &touched);
 
     equeue_break(&q);
     equeue_dispatch(&q, -1);
@@ -269,7 +269,7 @@ void simple_barrage_test(int N) {
     test_assert(!err);
 
     for (int i = 0; i < N; i++) {
-        struct timing *timing = event_alloc(&q, sizeof(struct timing));
+        struct timing *timing = equeue_alloc(&q, sizeof(struct timing));
         test_assert(timing);
 
         timing->tick = events_tick();
@@ -277,7 +277,7 @@ void simple_barrage_test(int N) {
         event_delay(timing, timing->delay);
         event_period(timing, timing->delay);
 
-        int id = event_post(&q, timing_func, timing);
+        int id = equeue_post(&q, timing_func, timing);
         test_assert(id);
     }
 
@@ -294,7 +294,7 @@ void fragmenting_barrage_test(int N) {
 
     for (int i = 0; i < N; i++) {
         unsigned size = sizeof(struct fragment) + i*sizeof(int);
-        struct fragment *fragment = event_alloc(&q, size);
+        struct fragment *fragment = equeue_alloc(&q, size);
         test_assert(fragment);
 
         fragment->q = &q;
@@ -303,7 +303,7 @@ void fragmenting_barrage_test(int N) {
         fragment->timing.delay = (i+1)*100;
         event_delay(fragment, fragment->timing.delay);
 
-        int id = event_post(&q, fragment_func, fragment);
+        int id = equeue_post(&q, fragment_func, fragment);
         test_assert(id);
     }
 
@@ -336,7 +336,7 @@ void multithreaded_barrage_test(int N) {
     test_assert(!err);
 
     for (int i = 0; i < N; i++) {
-        struct timing *timing = event_alloc(&q, sizeof(struct timing));
+        struct timing *timing = equeue_alloc(&q, sizeof(struct timing));
         test_assert(timing);
 
         timing->tick = events_tick();
@@ -344,7 +344,7 @@ void multithreaded_barrage_test(int N) {
         event_delay(timing, timing->delay);
         event_period(timing, timing->delay);
 
-        int id = event_post(&q, timing_func, timing);
+        int id = equeue_post(&q, timing_func, timing);
         test_assert(id);
     }
 

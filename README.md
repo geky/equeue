@@ -18,9 +18,9 @@ int main() {
     equeue_create(&queue, 32*EVENTS_EVENT_SIZE);
 
     // events are simple callbacks
-    event_call(&queue, print, "called immediately");
-    event_call_in(&queue, print, "called in 2 seconds", 2000);
-    event_call_every(&queue, print, "called every 1 seconds", 1000);
+    equeue_call(&queue, print, "called immediately");
+    equeue_call_in(&queue, print, "called in 2 seconds", 2000);
+    equeue_call_every(&queue, print, "called every 1 seconds", 1000);
 
     // events are executed when dispatch is called
     equeue_dispatch(&queue, 3000);

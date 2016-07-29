@@ -57,7 +57,7 @@ void equeue_destroy(equeue_t *q) {
     while (q->queue) {
         struct event *e = q->queue;
         q->queue = e->next;
-        event_dealloc(q, e+1);
+        equeue_dealloc(q, e+1);
     }
 
     events_mutex_destroy(&q->freelock);
@@ -67,7 +67,7 @@ void equeue_destroy(equeue_t *q) {
 }
 
 // equeue allocation functions
-static void *equeue_alloc(equeue_t *q, unsigned size) {
+static void *equeue_mem_alloc(equeue_t *q, unsigned size) {
     size = size + sizeof(unsigned);
     size = (size + sizeof(unsigned)-1) & ~(sizeof(unsigned)-1);
     if (size < sizeof(struct equeue_chunk)) {
@@ -103,7 +103,7 @@ static void *equeue_alloc(equeue_t *q, unsigned size) {
     return 0;
 }
 
-static void equeue_dealloc(equeue_t *q, void *e) {
+static void equeue_mem_dealloc(equeue_t *q, void *e) {
     struct equeue_chunk *c = (struct equeue_chunk *)((unsigned *)e - 1);
 
     events_mutex_lock(&q->freelock);
@@ -126,7 +126,7 @@ static void equeue_dealloc(equeue_t *q, void *e) {
 }
 
 // event allocation functions
-static inline int event_next_id(equeue_t *q) {
+static inline int equeue_next_id(equeue_t *q) {
     int id = q->next_id++;
     if (q->next_id < 0) {
         q->next_id = 42;
@@ -134,13 +134,13 @@ static inline int event_next_id(equeue_t *q) {
     return id;
 }
 
-void *event_alloc(equeue_t *q, unsigned size) {
-    struct event *e = equeue_alloc(q, sizeof(struct event) + size);
+void *equeue_alloc(equeue_t *q, unsigned size) {
+    struct event *e = equeue_mem_alloc(q, sizeof(struct event) + size);
     if (!e) {
         return 0;
     }
 
-    e->id = event_next_id(q);
+    e->id = equeue_next_id(q);
     e->target = 0;
     e->period = -1;
     e->dtor = 0;
@@ -148,14 +148,14 @@ void *event_alloc(equeue_t *q, unsigned size) {
     return e + 1;
 }
 
-void event_dealloc(equeue_t *q, void *p) {
+void equeue_dealloc(equeue_t *q, void *p) {
     struct event *e = (struct event*)p - 1;
 
     if (e->dtor) {
         e->dtor(e+1);
     }
 
-    equeue_dealloc(q, e);
+    equeue_mem_dealloc(q, e);
 }
 
 // equeue scheduling functions
@@ -187,10 +187,10 @@ static struct event *equeue_dequeue(equeue_t *q, int id) {
     return 0;
 }
 
-static int equeue_post(equeue_t *q, struct event *e, int ms) {
+static int equeue_post_in(equeue_t *q, struct event *e, int ms) {
     int id = e->id;
     if (ms < 0) {
-        event_dealloc(q, e+1);
+        equeue_dealloc(q, e+1);
         return id;
     }
 
@@ -202,23 +202,30 @@ static int equeue_post(equeue_t *q, struct event *e, int ms) {
     return id;
 }
 
-static void equeue_cancel(equeue_t *q, int id) {
+int equeue_post(equeue_t *q, void (*cb)(void*), void *p) {
+    struct event *e = (struct event*)p - 1;
+    e->cb = cb;
+    int id = equeue_post_in(q, e, e->target);
+    return id;
+}
+
+void equeue_cancel(equeue_t *q, int id) {
     events_mutex_lock(&q->queuelock);
     struct event *e = equeue_dequeue(q, id);
     events_mutex_unlock(&q->queuelock);
 
     if (e) {
-        event_dealloc(q, e+1);
+        equeue_dealloc(q, e+1);
     }
 }
 
 void equeue_break(equeue_t *q) {
-    equeue_post(q, &q->break_, 0);
+    equeue_post_in(q, &q->break_, 0);
 }
 
 void equeue_dispatch(equeue_t *q, int ms) {
     if (ms >= 0) {
-        equeue_post(q, &q->break_, ms);
+        equeue_post_in(q, &q->break_, ms);
     }
 
     while (1) {
@@ -244,7 +251,7 @@ void equeue_dispatch(equeue_t *q, int ms) {
 
             if (e->period >= 0) {
                 // requeue periodic tasks to avoid race conditions
-                // in event_cancel
+                // in equeue_cancel
                 equeue_enqueue(q, e, e->period);
             }
             events_mutex_unlock(&q->queuelock);
@@ -257,7 +264,7 @@ void equeue_dispatch(equeue_t *q, int ms) {
             e->cb(e + 1);
 
             if (e->period < 0) {
-                event_dealloc(q, e+1);
+                equeue_dealloc(q, e+1);
             }
         }
 
@@ -281,18 +288,6 @@ void event_dtor(void *p, void (*dtor)(void *)) {
     e->dtor = dtor;
 }
 
-// event operations
-int event_post(equeue_t *q, void (*cb)(void*), void *p) {
-    struct event *e = (struct event*)p - 1;
-    e->cb = cb;
-    int id = equeue_post(q, e, e->target);
-    return id;
-}
-
-void event_cancel(equeue_t *q, int id) {
-    equeue_cancel(q, id);
-}
-
 // simple callbacks 
 struct ecallback {
     void (*cb)(void*);
@@ -304,19 +299,19 @@ static void ecallback_dispatch(void *p) {
     e->cb(e->data);
 }
 
-int event_call(equeue_t *q, void (*cb)(void*), void *data) {
-    struct ecallback *e = event_alloc(q, sizeof(struct ecallback));
+int equeue_call(equeue_t *q, void (*cb)(void*), void *data) {
+    struct ecallback *e = equeue_alloc(q, sizeof(struct ecallback));
     if (!e) {
         return 0;
     }
 
     e->cb = cb;
     e->data = data;
-    return event_post(q, ecallback_dispatch, e);
+    return equeue_post(q, ecallback_dispatch, e);
 }
 
-int event_call_in(equeue_t *q, int ms, void (*cb)(void*), void *data) {
-    struct ecallback *e = event_alloc(q, sizeof(struct ecallback));
+int equeue_call_in(equeue_t *q, int ms, void (*cb)(void*), void *data) {
+    struct ecallback *e = equeue_alloc(q, sizeof(struct ecallback));
     if (!e) {
         return 0;
     }
@@ -324,11 +319,11 @@ int event_call_in(equeue_t *q, int ms, void (*cb)(void*), void *data) {
     event_delay(e, ms);
     e->cb = cb;
     e->data = data;
-    return event_post(q, ecallback_dispatch, e);
+    return equeue_post(q, ecallback_dispatch, e);
 }
 
-int event_call_every(equeue_t *q, int ms, void (*cb)(void*), void *data) {
-    struct ecallback *e = event_alloc(q, sizeof(struct ecallback));
+int equeue_call_every(equeue_t *q, int ms, void (*cb)(void*), void *data) {
+    struct ecallback *e = equeue_alloc(q, sizeof(struct ecallback));
     if (!e) {
         return 0;
     }
@@ -337,5 +332,5 @@ int event_call_every(equeue_t *q, int ms, void (*cb)(void*), void *data) {
     event_period(e, ms);
     e->cb = cb;
     e->data = data;
-    return event_post(q, ecallback_dispatch, e);
+    return equeue_post(q, ecallback_dispatch, e);
 }
