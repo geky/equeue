@@ -13,9 +13,9 @@ void print(void *s) {
 }
 
 int main() {
-    // creates a queue with 32 events with default size
+    // creates a queue with space for 32 basic events
     equeue_t queue;
-    equeue_create(&queue, 32, 0);
+    equeue_create(&queue, 32*EVENTS_EVENT_SIZE);
 
     // events are simple callbacks
     event_call(&queue, print, "called immediately");

@@ -126,7 +126,7 @@ void events_tick_prof(void) {
 
 void event_alloc_prof(void) {
     struct equeue q;
-    equeue_create(&q, 2*32*sizeof(struct event));
+    equeue_create(&q, 32*EVENTS_EVENT_SIZE);
 
     prof_loop() {
         prof_start();
@@ -141,7 +141,7 @@ void event_alloc_prof(void) {
 
 void event_alloc_many_prof(int count) {
     struct equeue q;
-    equeue_create(&q, 2*count*sizeof(struct event));
+    equeue_create(&q, count*EVENTS_EVENT_SIZE);
 
     void *es[count];
 
@@ -166,7 +166,7 @@ void event_alloc_many_prof(int count) {
 
 void event_post_prof(void) {
     struct equeue q;
-    equeue_create(&q, 2*sizeof(struct event));
+    equeue_create(&q, EVENTS_EVENT_SIZE);
 
     prof_loop() {
         void *e = event_alloc(&q, 0);
@@ -183,7 +183,7 @@ void event_post_prof(void) {
 
 void event_post_many_prof(int count) {
     struct equeue q;
-    equeue_create(&q, 2*count*sizeof(struct event));
+    equeue_create(&q, count*EVENTS_EVENT_SIZE);
 
     for (int i = 0; i < count; i++) {
         event_call(&q, no_func, 0);
@@ -204,7 +204,7 @@ void event_post_many_prof(int count) {
 
 void event_post_future_prof(void) {
     struct equeue q;
-    equeue_create(&q, 2*sizeof(struct event));
+    equeue_create(&q, EVENTS_EVENT_SIZE);
 
     prof_loop() {
         void *e = event_alloc(&q, 0);
@@ -222,7 +222,7 @@ void event_post_future_prof(void) {
 
 void event_post_future_many_prof(int count) {
     struct equeue q;
-    equeue_create(&q, 2*count*sizeof(struct event));
+    equeue_create(&q, count*EVENTS_EVENT_SIZE);
 
     for (int i = 0; i < count; i++) {
         event_call(&q, no_func, 0);
@@ -244,7 +244,7 @@ void event_post_future_many_prof(int count) {
 
 void equeue_dispatch_prof(void) {
     struct equeue q;
-    equeue_create(&q, 2*sizeof(struct event));
+    equeue_create(&q, EVENTS_EVENT_SIZE);
 
     prof_loop() {
         event_call(&q, no_func, 0);
@@ -259,7 +259,7 @@ void equeue_dispatch_prof(void) {
 
 void equeue_dispatch_many_prof(int count) {
     struct equeue q;
-    equeue_create(&q, 2*count*sizeof(struct event));
+    equeue_create(&q, count*EVENTS_EVENT_SIZE);
 
     prof_loop() {
         for (int i = 0; i < count; i++) {
@@ -276,7 +276,7 @@ void equeue_dispatch_many_prof(int count) {
 
 void event_cancel_prof(void) {
     struct equeue q;
-    equeue_create(&q, 2*sizeof(struct event));
+    equeue_create(&q, EVENTS_EVENT_SIZE);
 
     prof_loop() {
         int id = event_call(&q, no_func, 0);
@@ -291,7 +291,7 @@ void event_cancel_prof(void) {
 
 void event_cancel_many_prof(int count) {
     struct equeue q;
-    equeue_create(&q, 2*count*sizeof(struct event));
+    equeue_create(&q, count*EVENTS_EVENT_SIZE);
 
     for (int i = 0; i < count; i++) {
         event_call(&q, no_func, 0);
@@ -309,7 +309,7 @@ void event_cancel_many_prof(int count) {
 }
 
 void event_alloc_size_prof(void) {
-    size_t size = 2*32*sizeof(struct event);
+    size_t size = 32*EVENTS_EVENT_SIZE;
 
     struct equeue q;
     equeue_create(&q, size);
@@ -321,7 +321,7 @@ void event_alloc_size_prof(void) {
 }
 
 void event_alloc_many_size_prof(int count) {
-    size_t size = 2*count*sizeof(struct event);
+    size_t size = count*EVENTS_EVENT_SIZE;
 
     struct equeue q;
     equeue_create(&q, size);
@@ -336,7 +336,7 @@ void event_alloc_many_size_prof(int count) {
 }
 
 void event_alloc_fragmented_size_prof(int count) {
-    size_t size = 2*count*sizeof(struct event);
+    size_t size = count*EVENTS_EVENT_SIZE;
 
     struct equeue q;
     equeue_create(&q, size);
