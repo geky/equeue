@@ -28,6 +28,7 @@ struct equeue_event {
     unsigned size;
     int id;
     struct equeue_event *next;
+    struct equeue_event *sibling;
     struct equeue_event **ref;
 
     unsigned target;
@@ -46,12 +47,7 @@ typedef struct equeue {
     unsigned npw2;
     void *allocated;
 
-    struct equeue_chunk {
-        unsigned size;
-        int id;
-        struct equeue_chunk *next;
-        struct equeue_chunk *nchunk;
-    } *chunks;
+    struct equeue_event *chunks;
     struct equeue_slab {
         size_t size;
         unsigned char *data;

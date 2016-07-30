@@ -76,35 +76,35 @@ static struct equeue_event *equeue_mem_alloc(equeue_t *q, size_t size) {
 
     equeue_mutex_lock(&q->memlock);
 
-    for (struct equeue_chunk **p = &q->chunks; *p; p = &(*p)->nchunk) {
+    for (struct equeue_event **p = &q->chunks; *p; p = &(*p)->next) {
         if ((*p)->size >= size) {
-            struct equeue_chunk *c = *p;
-            if (c->next) {
-                *p = c->next;
-                (*p)->nchunk = c->nchunk;
+            struct equeue_event *e = *p;
+            if (e->sibling) {
+                *p = e->sibling;
+                (*p)->next = e->next;
             } else {
-                *p = c->nchunk;
+                *p = e->next;
             }
 
-            c->id += 1;
-            if (c->id >> (8*sizeof(int)-1 - q->npw2)) {
-                c->id = 1;
+            e->id += 1;
+            if (e->id >> (8*sizeof(int)-1 - q->npw2)) {
+                e->id = 1;
             }
 
             equeue_mutex_unlock(&q->memlock);
-            return (struct equeue_event *)c;
+            return e;
         }
     }
 
     if (q->slab.size >= size) {
-        struct equeue_chunk *c = (struct equeue_chunk *)q->slab.data;
+        struct equeue_event *e = (struct equeue_event *)q->slab.data;
         q->slab.data += size;
         q->slab.size -= size;
-        c->size = size;
-        c->id = 1;
+        e->size = size;
+        e->id = 1;
 
         equeue_mutex_unlock(&q->memlock);
-        return (struct equeue_event *)c;
+        return e;
     }
 
     equeue_mutex_unlock(&q->memlock);
@@ -112,23 +112,21 @@ static struct equeue_event *equeue_mem_alloc(equeue_t *q, size_t size) {
 }
 
 static void equeue_mem_dealloc(equeue_t *q, struct equeue_event *e) {
-    struct equeue_chunk *c = (struct equeue_chunk *)e;
-
     equeue_mutex_lock(&q->memlock);
 
-    struct equeue_chunk **p = &q->chunks;
-    while (*p && (*p)->size < c->size) {
-        p = &(*p)->nchunk;
+    struct equeue_event **p = &q->chunks;
+    while (*p && (*p)->size < e->size) {
+        p = &(*p)->next;
     }
 
-    if (*p && (*p)->size == c->size) {
-        c->next = *p;
-        c->nchunk = (*p)->nchunk;
+    if (*p && (*p)->size == e->size) {
+        e->sibling = *p;
+        e->next = (*p)->next;
     } else {
-        c->next = 0;
-        c->nchunk = *p;
+        e->sibling = 0;
+        e->next = *p;
     }
-    *p = c;
+    *p = e;
 
     equeue_mutex_unlock(&q->memlock);
 }
@@ -166,48 +164,78 @@ static void equeue_enqueue(equeue_t *q, struct equeue_event *e, unsigned ms) {
     e->target = equeue_tick() + ms;
 
     struct equeue_event **p = &q->queue;
-    while (*p && equeue_tickdiff((*p)->target, e->target) <= 0) {
+    while (*p && equeue_tickdiff((*p)->target, e->target) < 0) {
         p = &(*p)->next;
     }
 
-    e->ref = p;
-    e->next = *p;
-    if (*p) {
-        (*p)->ref = &e->next;
+    if (*p && (*p)->target == e->target) {
+        if (*p) {
+            (*p)->ref = &e->sibling;
+        }
+        e->sibling = *p;
+
+        if ((*p)->next) {
+            (*p)->next->ref = &e->next;
+        }
+        e->next = (*p)->next;
+    } else {
+        if (*p) {
+            (*p)->ref = &e->next;
+        }
+        e->next = *p;
+
+        e->sibling = 0;
     }
+
+    e->ref = p;
     *p = e;
 }
 
 static void equeue_unqueue(equeue_t *q, struct equeue_event *e) {
-    if (e->next) {
-        e->next->ref = e->ref;
+    if (e->sibling) {
+        if (e->next) {
+            e->next->ref = &e->sibling->next;
+        }
+        e->sibling->next = e->next;
+
+        e->sibling->ref = e->ref;
+        *e->ref = e->sibling;
+    } else {
+        if (e->next) {
+            e->next->ref = e->ref;
+        }
+        *e->ref = e->next;
     }
-    *e->ref = e->next;
 }
 
-static struct equeue_event *equeue_dequeue(
-        equeue_t *q, unsigned target, int *deadline) {
-    struct equeue_event *head = q->queue;
-    if (!head || equeue_tickdiff(head->target, target) > 0) {
-        return 0;
-    }
+static struct equeue_event *equeue_dequeue(equeue_t *q, int *deadline) {
+    unsigned target = equeue_tick();
+    struct equeue_event *head = 0;
+    struct equeue_event **tail = &head;
 
-    struct equeue_event **p = &q->queue;
-    while (*p) {
-        int diff = equeue_tickdiff((*p)->target, target);
+    while (q->queue) {
+        int diff = equeue_tickdiff(q->queue->target, target);
         if (diff > 0) {
             *deadline = diff;
             break;
         }
 
-        p = &(*p)->next;
+        struct equeue_event *es = q->queue;
+        q->queue = es->next;
+
+        struct equeue_event *prev = 0;
+        for (struct equeue_event *e = es; e; e = e->sibling) {
+            e->next = prev;
+            prev = e;
+        }
+
+        *tail = prev;
+        tail = &es->next;
     }
 
-    if (*p) {
-        (*p)->ref = &q->queue;
+    if (q->queue) {
+        q->queue->ref = &q->queue;
     }
-    q->queue = *p;
-    *p = 0;
 
     return head;
 }
@@ -267,7 +295,7 @@ void equeue_dispatch(equeue_t *q, int ms) {
         int deadline = -1;
         if (q->queue) {
             equeue_mutex_lock(&q->queuelock);
-            es = equeue_dequeue(q, equeue_tick(), &deadline);
+            es = equeue_dequeue(q, &deadline);
 
             // mark events as in-flight
             for (struct equeue_event *e = es; e; e = e->next) {
