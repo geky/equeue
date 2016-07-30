@@ -40,6 +40,7 @@ struct equeue_event {
 
 typedef struct equeue {
     struct equeue_event *queue;
+    int breaks;
 
     unsigned char *buffer;
     unsigned npw2;
@@ -55,8 +56,6 @@ typedef struct equeue {
         size_t size;
         unsigned char *data;
     } slab;
-
-    struct equeue_event break_;
 
     equeue_sema_t eventsema;
     equeue_mutex_t queuelock;
