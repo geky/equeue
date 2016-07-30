@@ -10,7 +10,7 @@
 #include <string.h>
 
 
-int equeue_create(equeue_t *q, unsigned size) {
+int equeue_create(equeue_t *q, size_t size) {
     void *buffer = malloc(size);
     if (!buffer) {
         return -1;
@@ -21,7 +21,7 @@ int equeue_create(equeue_t *q, unsigned size) {
     return err;
 }
 
-int equeue_create_inplace(equeue_t *q, unsigned size, void *buffer) {
+int equeue_create_inplace(equeue_t *q, size_t size, void *buffer) {
     q->slab.size = size;
     q->slab.data = buffer;
     q->chunks = 0;
@@ -67,7 +67,7 @@ void equeue_destroy(equeue_t *q) {
 }
 
 // equeue allocation functions
-static void *equeue_mem_alloc(equeue_t *q, unsigned size) {
+static void *equeue_mem_alloc(equeue_t *q, size_t size) {
     size = size + sizeof(unsigned);
     size = (size + sizeof(unsigned)-1) & ~(sizeof(unsigned)-1);
     if (size < sizeof(struct equeue_chunk)) {
@@ -134,7 +134,7 @@ static inline int equeue_next_id(equeue_t *q) {
     return id;
 }
 
-void *equeue_alloc(equeue_t *q, unsigned size) {
+void *equeue_alloc(equeue_t *q, size_t size) {
     struct equeue_event *e = equeue_mem_alloc(q,
             sizeof(struct equeue_event) + size);
     if (!e) {

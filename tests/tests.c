@@ -74,7 +74,7 @@ void timing_func(void *p) {
 
 struct fragment {
     equeue_t *q;
-    unsigned size;
+    size_t size;
     struct timing timing;
 };
 
@@ -293,7 +293,7 @@ void fragmenting_barrage_test(int N) {
     test_assert(!err);
 
     for (int i = 0; i < N; i++) {
-        unsigned size = sizeof(struct fragment) + i*sizeof(int);
+        size_t size = sizeof(struct fragment) + i*sizeof(int);
         struct fragment *fragment = equeue_alloc(&q, size);
         test_assert(fragment);
 

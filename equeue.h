@@ -16,6 +16,8 @@ extern "C" {
 #include "equeue_mutex.h"
 #include "equeue_sema.h"
 
+#include <stddef.h>
+
 
 // Definition of the minimum size of an event
 // This size fits the events created in the event_call set of functions.
@@ -44,7 +46,7 @@ typedef struct equeue {
         struct equeue_chunk *nchunk;
     } *chunks;
     struct equeue_slab {
-        unsigned size;
+        size_t size;
         unsigned char *data;
     } slab;
 
@@ -59,8 +61,8 @@ typedef struct equeue {
 // Queue operations
 //
 // Creation results in negative value on failure.
-int equeue_create(equeue_t *queue, unsigned size);
-int equeue_create_inplace(equeue_t *queue, unsigned size, void *buffer);
+int equeue_create(equeue_t *queue, size_t size);
+int equeue_create_inplace(equeue_t *queue, size_t size, void *buffer);
 void equeue_destroy(equeue_t *queue);
 
 // Dispatch events
@@ -98,7 +100,7 @@ int equeue_call_every(equeue_t *queue, int ms, void (*cb)(void *), void *data);
 //
 // equeue_alloc will result in null if no memory is available
 // or the requested size is less than the size passed to equeue_create.
-void *equeue_alloc(equeue_t *queue, unsigned size);
+void *equeue_alloc(equeue_t *queue, size_t size);
 void equeue_dealloc(equeue_t *queue, void *event);
 
 // Configure an allocated event
