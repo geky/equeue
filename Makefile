@@ -1,4 +1,4 @@
-TARGET = libevents.a
+TARGET = libequeue.a
 
 CC = gcc
 AR = ar

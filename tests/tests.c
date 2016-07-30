@@ -4,7 +4,7 @@
  * Copyright (c) 2016 Christopher Haster
  * Distributed under the MIT license
  */
-#include "events.h"
+#include "equeue.h"
 #include <unistd.h>
 #include <stdio.h>
 #include <setjmp.h>
@@ -63,7 +63,7 @@ struct timing {
 
 void timing_func(void *p) {
     struct timing *timing = (struct timing*)p;
-    unsigned tick = events_tick();
+    unsigned tick = equeue_tick();
 
     unsigned t1 = timing->delay;
     unsigned t2 = tick - timing->tick;
@@ -86,7 +86,7 @@ void fragment_func(void *p) {
     test_assert(nfragment);
 
     *nfragment = *fragment;
-    event_delay(nfragment, fragment->timing.delay);
+    equeue_event_delay(nfragment, fragment->timing.delay);
 
     int id = equeue_post(nfragment->q, fragment_func, nfragment);
     test_assert(id);
@@ -167,7 +167,7 @@ void destructor_test(void) {
     test_assert(i);
 
     i->touched = &touched;
-    event_dtor(i, indirect_func);
+    equeue_event_dtor(i, indirect_func);
     int id = equeue_post(&q, pass_func, i);
     test_assert(id);
 
@@ -179,7 +179,7 @@ void destructor_test(void) {
     test_assert(i);
 
     i->touched = &touched;
-    event_dtor(i, indirect_func);
+    equeue_event_dtor(i, indirect_func);
     id = equeue_post(&q, pass_func, i);
     test_assert(id);
 
@@ -265,17 +265,17 @@ void break_test(void) {
 // Barrage tests
 void simple_barrage_test(int N) {
     equeue_t q;
-    int err = equeue_create(&q, N*(EVENTS_EVENT_SIZE+sizeof(struct timing)));
+    int err = equeue_create(&q, N*(EQUEUE_EVENT_SIZE+sizeof(struct timing)));
     test_assert(!err);
 
     for (int i = 0; i < N; i++) {
         struct timing *timing = equeue_alloc(&q, sizeof(struct timing));
         test_assert(timing);
 
-        timing->tick = events_tick();
+        timing->tick = equeue_tick();
         timing->delay = (i+1)*100;
-        event_delay(timing, timing->delay);
-        event_period(timing, timing->delay);
+        equeue_event_delay(timing, timing->delay);
+        equeue_event_period(timing, timing->delay);
 
         int id = equeue_post(&q, timing_func, timing);
         test_assert(id);
@@ -289,7 +289,7 @@ void simple_barrage_test(int N) {
 void fragmenting_barrage_test(int N) {
     equeue_t q;
     int err = equeue_create(&q,
-            2*N*(EVENTS_EVENT_SIZE+sizeof(struct fragment)+N*sizeof(int)));
+            2*N*(EQUEUE_EVENT_SIZE+sizeof(struct fragment)+N*sizeof(int)));
     test_assert(!err);
 
     for (int i = 0; i < N; i++) {
@@ -299,9 +299,9 @@ void fragmenting_barrage_test(int N) {
 
         fragment->q = &q;
         fragment->size = size;
-        fragment->timing.tick = events_tick();
+        fragment->timing.tick = equeue_tick();
         fragment->timing.delay = (i+1)*100;
-        event_delay(fragment, fragment->timing.delay);
+        equeue_event_delay(fragment, fragment->timing.delay);
 
         int id = equeue_post(&q, fragment_func, fragment);
         test_assert(id);
@@ -326,7 +326,7 @@ static void *ethread_dispatch(void *p) {
 
 void multithreaded_barrage_test(int N) {
     equeue_t q;
-    int err = equeue_create(&q, N*(EVENTS_EVENT_SIZE+sizeof(struct timing)));
+    int err = equeue_create(&q, N*(EQUEUE_EVENT_SIZE+sizeof(struct timing)));
     test_assert(!err);
 
     struct ethread t;
@@ -339,10 +339,10 @@ void multithreaded_barrage_test(int N) {
         struct timing *timing = equeue_alloc(&q, sizeof(struct timing));
         test_assert(timing);
 
-        timing->tick = events_tick();
+        timing->tick = equeue_tick();
         timing->delay = (i+1)*100;
-        event_delay(timing, timing->delay);
-        event_period(timing, timing->delay);
+        equeue_event_delay(timing, timing->delay);
+        equeue_event_period(timing, timing->delay);
 
         int id = equeue_post(&q, timing_func, timing);
         test_assert(id);

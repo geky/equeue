@@ -4,8 +4,8 @@
  * Copyright (c) 2016 Christopher Haster
  * Distributed under the MIT license
  */
-#ifndef EVENTS_MUTEX_H
-#define EVENTS_MUTEX_H
+#ifndef EQUEUE_MUTEX_H
+#define EQUEUE_MUTEX_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,17 +19,17 @@ extern "C" {
 // interrupt contexts.
 #if defined(__unix__)
 #include <pthread.h>
-typedef pthread_mutex_t events_mutex_t;
+typedef pthread_mutex_t equeue_mutex_t;
 #elif defined(__MBED__)
-typedef unsigned events_mutex_t;
+typedef unsigned equeue_mutex_t;
 #endif
 
 
 // Mutex operations
-int events_mutex_create(events_mutex_t *mutex);
-void events_mutex_destroy(events_mutex_t *mutex);
-void events_mutex_lock(events_mutex_t *mutex);
-void events_mutex_unlock(events_mutex_t *mutex);
+int equeue_mutex_create(equeue_mutex_t *mutex);
+void equeue_mutex_destroy(equeue_mutex_t *mutex);
+void equeue_mutex_lock(equeue_mutex_t *mutex);
+void equeue_mutex_unlock(equeue_mutex_t *mutex);
 
 
 #ifdef __cplusplus
