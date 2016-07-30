@@ -21,12 +21,15 @@ extern "C" {
 
 // Definition of the minimum size of an event
 // This size fits the events created in the event_call set of functions.
-#define EQUEUE_EVENT_SIZE (sizeof(struct equeue_event) + 3*sizeof(void*))
+#define EQUEUE_EVENT_SIZE (sizeof(struct equeue_event) + 2*sizeof(void*))
 
 // Event/queue structures
 struct equeue_event {
-    struct equeue_event *next;
+    unsigned size;
     int id;
+    struct equeue_event *next;
+    struct equeue_event **ref;
+
     unsigned target;
     int period;
     void (*dtor)(void *);
@@ -37,11 +40,14 @@ struct equeue_event {
 
 typedef struct equeue {
     struct equeue_event *queue;
-    int next_id;
 
-    void *buffer;
+    unsigned char *buffer;
+    unsigned npw2;
+    void *allocated;
+
     struct equeue_chunk {
         unsigned size;
+        int id;
         struct equeue_chunk *next;
         struct equeue_chunk *nchunk;
     } *chunks;
@@ -54,7 +60,7 @@ typedef struct equeue {
 
     equeue_sema_t eventsema;
     equeue_mutex_t queuelock;
-    equeue_mutex_t freelock;
+    equeue_mutex_t memlock;
 } equeue_t;
 
 

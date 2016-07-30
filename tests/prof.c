@@ -185,7 +185,7 @@ void equeue_post_many_prof(int count) {
     struct equeue q;
     equeue_create(&q, count*EQUEUE_EVENT_SIZE);
 
-    for (int i = 0; i < count; i++) {
+    for (int i = 0; i < count-1; i++) {
         equeue_call(&q, no_func, 0);
     }
 
@@ -224,7 +224,7 @@ void equeue_post_future_many_prof(int count) {
     struct equeue q;
     equeue_create(&q, count*EQUEUE_EVENT_SIZE);
 
-    for (int i = 0; i < count; i++) {
+    for (int i = 0; i < count-1; i++) {
         equeue_call(&q, no_func, 0);
     }
 
@@ -293,7 +293,7 @@ void equeue_cancel_many_prof(int count) {
     struct equeue q;
     equeue_create(&q, count*EQUEUE_EVENT_SIZE);
 
-    for (int i = 0; i < count; i++) {
+    for (int i = 0; i < count-1; i++) {
         equeue_call(&q, no_func, 0);
     }
 
