@@ -4,26 +4,26 @@
  * Copyright (c) 2016 Christopher Haster
  * Distributed under the MIT license
  */
-#ifndef EVENTS_H
-#define EVENTS_H
+#ifndef EQUEUE_H
+#define EQUEUE_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 // System specific files
-#include "events_tick.h"
-#include "events_mutex.h"
-#include "events_sema.h"
+#include "equeue_tick.h"
+#include "equeue_mutex.h"
+#include "equeue_sema.h"
 
 
 // Definition of the minimum size of an event
 // This size fits the events created in the event_call set of functions.
-#define EVENTS_EVENT_SIZE (sizeof(struct event) + 3*sizeof(void*))
+#define EQUEUE_EVENT_SIZE (sizeof(struct equeue_event) + 3*sizeof(void*))
 
 // Event/queue structures
-struct event {
-    struct event *next;
+struct equeue_event {
+    struct equeue_event *next;
     int id;
     unsigned target;
     int period;
@@ -34,7 +34,7 @@ struct event {
 };
 
 typedef struct equeue {
-    struct event *queue;
+    struct equeue_event *queue;
     int next_id;
 
     void *buffer;
@@ -48,11 +48,11 @@ typedef struct equeue {
         unsigned char *data;
     } slab;
 
-    struct event break_;
+    struct equeue_event break_;
 
-    events_sema_t eventsema;
-    events_mutex_t queuelock;
-    events_mutex_t freelock;
+    equeue_sema_t eventsema;
+    equeue_mutex_t queuelock;
+    equeue_mutex_t freelock;
 } equeue_t;
 
 
@@ -103,12 +103,12 @@ void equeue_dealloc(equeue_t *queue, void *event);
 
 // Configure an allocated event
 // 
-// event_delay  - Specify a millisecond delay before posting an event
-// event_period - Specify a millisecond period to repeatedly post an event
-// event_dtor   - Specify a destructor to run before the memory is deallocated
-void event_delay(void *event, int ms);
-void event_period(void *event, int ms);
-void event_dtor(void *event, void (*dtor)(void *));
+// equeue_event_delay  - Millisecond delay before posting an event
+// equeue_event_period - Millisecond period to repeatedly post an event
+// equeue_event_dtor   - Destructor to run when the event is deallocated
+void equeue_event_delay(void *event, int ms);
+void equeue_event_period(void *event, int ms);
+void equeue_event_dtor(void *event, void (*dtor)(void *));
 
 // Post an allocted event to the event queue
 //

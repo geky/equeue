@@ -1,11 +1,10 @@
-## Events ##
+## The equeue library ##
 
-The events library provides a flexible event queue implementation
-that acts as a drop in scheduler and framework for composable event
-loops.
+The equeue library provides a composable event queue implementation
+that acts as a drop in scheduler and event framework.
 
 ``` c
-#include "events.h"
+#include "equeue.h"
 #include <stdio.h>
 
 void print(void *s) {
@@ -15,12 +14,12 @@ void print(void *s) {
 int main() {
     // creates a queue with space for 32 basic events
     equeue_t queue;
-    equeue_create(&queue, 32*EVENTS_EVENT_SIZE);
+    equeue_create(&queue, 32*EQUEUE_EVENT_SIZE);
 
     // events are simple callbacks
     equeue_call(&queue, print, "called immediately");
-    equeue_call_in(&queue, print, "called in 2 seconds", 2000);
-    equeue_call_every(&queue, print, "called every 1 seconds", 1000);
+    equeue_call_in(&queue, 2000, print, "called in 2 seconds");
+    equeue_call_every(&queue, 1000, print, "called every 1 seconds");
 
     // events are executed when dispatch is called
     equeue_dispatch(&queue, 3000);
@@ -32,14 +31,14 @@ int main() {
 }
 ```
 
-The events library can be used for normal event loops, however it also
-supports multithreaded environments. More information on the idea
-behind composable event loops 
+The equeue library can be used for a normal event loops, however it also
+supports composition and multithreaded environments. More information on
+the idea behind composable event loops 
 [here](https://gist.github.com/geky/4969d940f1bd5596bdc10e79093e2553).
 
 ## Tests ##
 
-The events library uses a set of local tests based on the posix implementation.
+The equeue library uses a set of local tests based on the posix implementation.
 
 Runtime tests are located in [tests.c](tests/tests.c):
 
@@ -63,6 +62,6 @@ cat results.txt | make prof
 ## Porting ##
 
 The events library requires a small porting layer:
-- [events_tick](events_tick.h) - monotonic counter
-- [events_mutex](events_mutex.h) - non-recursive mutex
-- [events_sema](events_sema.h) - binary semaphore
+- [equeue_tick](equeue_tick.h) - monotonic counter
+- [equeue_mutex](equeue_mutex.h) - non-recursive mutex
+- [equeue_sema](equeue_sema.h) - binary semaphore
