@@ -43,7 +43,7 @@ void pass_func(void *eh) {
 }
 
 void simple_func(void *p) {
-    *(bool *)p = true;
+    (*(int *)p)++;
 }
 
 struct indirect {
@@ -113,10 +113,10 @@ void simple_call_in_test(void) {
     test_assert(!err);
 
     bool touched = false;
-    int id = equeue_call_in(&q, 5, simple_func, &touched);
+    int id = equeue_call_in(&q, 10, simple_func, &touched);
     test_assert(id);
 
-    equeue_dispatch(&q, 10);
+    equeue_dispatch(&q, 15);
     test_assert(touched);
 
     equeue_destroy(&q);
@@ -128,10 +128,10 @@ void simple_call_every_test(void) {
     test_assert(!err);
 
     bool touched = false;
-    int id = equeue_call_every(&q, 5, simple_func, &touched);
+    int id = equeue_call_every(&q, 10, simple_func, &touched);
     test_assert(id);
 
-    equeue_dispatch(&q, 10);
+    equeue_dispatch(&q, 15);
     test_assert(touched);
 
     equeue_destroy(&q);
@@ -227,6 +227,34 @@ void cancel_test(int N) {
     equeue_destroy(&q);
 }
 
+void cancel_unnecessarily_test(void) {
+    equeue_t q;
+    int err = equeue_create(&q, 2048);
+    test_assert(!err);
+
+    int id = equeue_call(&q, pass_func, 0);
+    for (int i = 0; i < 5; i++) {
+        equeue_cancel(&q, id);
+    }
+
+    id = equeue_call(&q, pass_func, 0);
+    equeue_dispatch(&q, 0);
+    for (int i = 0; i < 5; i++) {
+        equeue_cancel(&q, id);
+    }
+
+    bool touched = false;
+    equeue_call(&q, simple_func, &touched);
+    for (int i = 0; i < 5; i++) {
+        equeue_cancel(&q, id);
+    }
+
+    equeue_dispatch(&q, 0);
+    test_assert(touched);
+
+    equeue_destroy(&q);
+}
+
 void loop_protect_test(void) {
     equeue_t q;
     int err = equeue_create(&q, 2048);
@@ -258,6 +286,20 @@ void break_test(void) {
     equeue_break(&q);
     equeue_dispatch(&q, -1);
     test_assert(touched);
+
+    equeue_destroy(&q);
+}
+
+void period_test(void) {
+    equeue_t q;
+    int err = equeue_create(&q, 2048);
+    test_assert(!err);
+
+    int count = 0;
+    equeue_call_every(&q, 10, simple_func, &count);
+
+    equeue_dispatch(&q, 55);
+    test_assert(count == 5);
 
     equeue_destroy(&q);
 }
@@ -365,8 +407,10 @@ int main() {
     test_run(destructor_test);
     test_run(allocation_failure_test);
     test_run(cancel_test, 20);
+    test_run(cancel_unnecessarily_test);
     test_run(loop_protect_test);
     test_run(break_test);
+    test_run(period_test);
     test_run(simple_barrage_test, 20);
     test_run(fragmenting_barrage_test, 20);
     test_run(multithreaded_barrage_test, 20);

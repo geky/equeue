@@ -86,11 +86,6 @@ static struct equeue_event *equeue_mem_alloc(equeue_t *q, size_t size) {
                 *p = e->next;
             }
 
-            e->id += 1;
-            if (e->id >> (8*sizeof(int)-1 - q->npw2)) {
-                e->id = 1;
-            }
-
             equeue_mutex_unlock(&q->memlock);
             return e;
         }
@@ -240,6 +235,14 @@ static struct equeue_event *equeue_dequeue(equeue_t *q, int *deadline) {
     return head;
 }
 
+static inline int equeue_incid(equeue_t *q, int id) {
+    if ((id+1) >> (8*sizeof(int)-1 - q->npw2)) {
+        return 1;
+    }
+
+    return id+1;
+}
+
 int equeue_post(equeue_t *q, void (*cb)(void*), void *p) {
     struct equeue_event *e = (struct equeue_event*)p - 1;
     int id = (e->id << q->npw2) | ((unsigned char *)e - q->buffer);
@@ -274,6 +277,7 @@ void equeue_cancel(equeue_t *q, int id) {
     }
 
     equeue_unqueue(q, e);
+    e->id = equeue_incid(q, e->id);
     equeue_mutex_unlock(&q->queuelock);
 
     equeue_dealloc(q, e+1);
@@ -316,12 +320,15 @@ void equeue_dispatch(equeue_t *q, int ms) {
             }
 
             // undirty the id and either dealloc or reenqueue periodic events
-            e->id = -e->id;
             if (e->period >= 0) {
                 equeue_mutex_lock(&q->queuelock);
+                e->id = -e->id;
                 equeue_enqueue(q, e, e->period);
                 equeue_mutex_unlock(&q->queuelock);
+
+                equeue_sema_signal(&q->eventsema);
             } else {
+                e->id = equeue_incid(q, -e->id);
                 equeue_dealloc(q, e+1);
             }
         }

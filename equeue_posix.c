@@ -12,6 +12,7 @@
 
 #include <time.h>
 #include <sys/time.h>
+#include <errno.h>
 
 
 // Tick operations
@@ -57,11 +58,14 @@ bool equeue_sema_wait(equeue_sema_t *s, int ms) {
     if (ms < 0) {
         return !sem_wait(s);
     } else {
-        ms += equeue_tick();
+        struct timeval tv;
+        gettimeofday(&tv, 0);
+
         struct timespec ts = {
-            .tv_sec = ms/1000,
-            .tv_nsec = ms*1000000,
+            .tv_sec = ms/1000 + tv.tv_sec,
+            .tv_nsec = ms*1000000 + tv.tv_usec*1000,
         };
+
         return !sem_timedwait(s, &ts);
     }
 }
