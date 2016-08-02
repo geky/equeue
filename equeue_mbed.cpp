@@ -77,7 +77,7 @@ void equeue_sema_destroy(equeue_sema_t *s) {
     delete sema(s);
 }
 
-void equeue_sema_release(equeue_sema_t *s) {
+void equeue_sema_signal(equeue_sema_t *s) {
     sema(s)->release();
 }
 
@@ -91,7 +91,7 @@ bool equeue_sema_wait(equeue_sema_t *s, int ms) {
 // Semaphore operations
 int equeue_sema_create(equeue_sema_t *s) { return 0; }
 void equeue_sema_destroy(equeue_sema_t *s) {}
-void equeue_sema_release(equeue_sema_t *s) {}
+void equeue_sema_signal(equeue_sema_t *s) {}
 
 static void equeue_sema_wakeup() {}
 

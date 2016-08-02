@@ -49,7 +49,7 @@ void equeue_sema_destroy(equeue_sema_t *s) {
     sem_destroy(s);
 }
 
-void equeue_sema_release(equeue_sema_t *s) {
+void equeue_sema_signal(equeue_sema_t *s) {
     sem_post(s);
 }
 

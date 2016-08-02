@@ -254,7 +254,7 @@ int equeue_post(equeue_t *q, void (*cb)(void*), void *p) {
     equeue_enqueue(q, e, e->target);
     equeue_mutex_unlock(&q->queuelock);
 
-    equeue_sema_release(&q->eventsema);
+    equeue_sema_signal(&q->eventsema);
     return id;
 }
 
@@ -283,7 +283,7 @@ void equeue_break(equeue_t *q) {
     equeue_mutex_lock(&q->queuelock);
     q->breaks++;
     equeue_mutex_unlock(&q->queuelock);
-    equeue_sema_release(&q->eventsema);
+    equeue_sema_signal(&q->eventsema);
 }
 
 void equeue_dispatch(equeue_t *q, int ms) {

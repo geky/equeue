@@ -33,7 +33,7 @@ typedef struct {} equeue_sema_t;
 // Semaphore operations
 int equeue_sema_create(equeue_sema_t *sema);
 void equeue_sema_destroy(equeue_sema_t *sema);
-void equeue_sema_release(equeue_sema_t *sema);
+void equeue_sema_signal(equeue_sema_t *sema);
 bool equeue_sema_wait(equeue_sema_t *sema, int ms);
 
 
