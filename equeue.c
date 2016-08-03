@@ -57,10 +57,13 @@ int equeue_create_inplace(equeue_t *q, size_t size, void *buffer) {
 }
 
 void equeue_destroy(equeue_t *q) {
-    while (q->queue) {
-        struct equeue_event *e = q->queue;
-        q->queue = e->next;
-        equeue_dealloc(q, e+1);
+    // call destructors on pending events
+    for (struct equeue_event *es = q->queue; es; es = es->next) {
+        for (struct equeue_event *e = q->queue; e; e = e->sibling) {
+            if (e->dtor) {
+                e->dtor(e + 1);
+            }
+        }
     }
 
     equeue_mutex_destroy(&q->memlock);

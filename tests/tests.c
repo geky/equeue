@@ -47,13 +47,13 @@ void simple_func(void *p) {
 }
 
 struct indirect {
-    bool *touched;
+    int *touched;
     uint8_t buffer[7];
 };
 
 void indirect_func(void *p) {
     struct indirect *i = (struct indirect*)p;
-    *i->touched = true;
+    (*i->touched)++;
 }
 
 struct timing {
@@ -142,7 +142,7 @@ void simple_post_test(void) {
     int err = equeue_create(&q, 2048);
     test_assert(!err);
 
-    bool touched = false;
+    int touched = false;
     struct indirect *i = equeue_alloc(&q, sizeof(struct indirect));
     test_assert(i);
 
@@ -162,29 +162,53 @@ void destructor_test(void) {
     int err = equeue_create(&q, 2048);
     test_assert(!err);
 
-    bool touched = false;
-    struct indirect *i = equeue_alloc(&q, sizeof(struct indirect));
-    test_assert(i);
+    int touched;
+    struct indirect *e;
+    int ids[3];
 
-    i->touched = &touched;
-    equeue_event_dtor(i, indirect_func);
-    int id = equeue_post(&q, pass_func, i);
-    test_assert(id);
+    touched = 0;
+    for (int i = 0; i < 3; i++) {
+        e = equeue_alloc(&q, sizeof(struct indirect));
+        test_assert(e);
+
+        e->touched = &touched;
+        equeue_event_dtor(e, indirect_func);
+        int id = equeue_post(&q, pass_func, e);
+        test_assert(id);
+    }
 
     equeue_dispatch(&q, 0);
-    test_assert(touched);
+    test_assert(touched == 3);
 
-    touched = false;
-    i = equeue_alloc(&q, sizeof(struct indirect));
-    test_assert(i);
+    touched = 0;
+    for (int i = 0; i < 3; i++) {
+        e = equeue_alloc(&q, sizeof(struct indirect));
+        test_assert(e);
 
-    i->touched = &touched;
-    equeue_event_dtor(i, indirect_func);
-    id = equeue_post(&q, pass_func, i);
-    test_assert(id);
+        e->touched = &touched;
+        equeue_event_dtor(e, indirect_func);
+        ids[i] = equeue_post(&q, pass_func, e);
+        test_assert(ids[i]);
+    }
+
+    for (int i = 0; i < 3; i++) {
+        equeue_cancel(&q, ids[i]);
+    }
+    test_assert(touched == 3);
+
+    touched = 0;
+    for (int i = 0; i < 3; i++) {
+        e = equeue_alloc(&q, sizeof(struct indirect));
+        test_assert(e);
+
+        e->touched = &touched;
+        equeue_event_dtor(e, indirect_func);
+        int id = equeue_post(&q, pass_func, e);
+        test_assert(id);
+    }
 
     equeue_destroy(&q);
-    test_assert(touched);
+    test_assert(touched == 3);
 }
 
 void allocation_failure_test(void) {
