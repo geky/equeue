@@ -167,42 +167,40 @@ static void equeue_enqueue(equeue_t *q, struct equeue_event *e, unsigned ms) {
     }
 
     if (*p && (*p)->target == e->target) {
-        if (*p) {
-            (*p)->ref = &e->sibling;
-        }
-        e->sibling = *p;
-
-        if ((*p)->next) {
-            (*p)->next->ref = &e->next;
-        }
         e->next = (*p)->next;
-    } else {
-        if (*p) {
-            (*p)->ref = &e->next;
+        if (e->next) {
+            e->next->ref = &e->next;
         }
+
+        e->sibling = *p;
+        e->sibling->ref = &e->sibling;
+    } else {
         e->next = *p;
+        if (e->next) {
+            e->next->ref = &e->next;
+        }
 
         e->sibling = 0;
     }
 
-    e->ref = p;
     *p = e;
+    e->ref = p;
 }
 
 static void equeue_unqueue(equeue_t *q, struct equeue_event *e) {
     if (e->sibling) {
-        if (e->next) {
-            e->next->ref = &e->sibling->next;
-        }
         e->sibling->next = e->next;
+        if (e->sibling->next) {
+            e->sibling->next->ref = &e->sibling->next;
+        }
 
-        e->sibling->ref = e->ref;
         *e->ref = e->sibling;
+        e->sibling->ref = e->ref;
     } else {
+        *e->ref = e->next;
         if (e->next) {
             e->next->ref = e->ref;
         }
-        *e->ref = e->next;
     }
 }
 
