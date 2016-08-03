@@ -204,18 +204,12 @@ static void equeue_unqueue(equeue_t *q, struct equeue_event *e) {
     }
 }
 
-static struct equeue_event *equeue_dequeue(equeue_t *q, int *deadline) {
+static struct equeue_event *equeue_dequeue(equeue_t *q) {
     unsigned target = equeue_tick();
     struct equeue_event *head = 0;
     struct equeue_event **tail = &head;
 
-    while (q->queue) {
-        int diff = equeue_tickdiff(q->queue->target, target);
-        if (diff > 0) {
-            *deadline = diff;
-            break;
-        }
-
+    while (q->queue && equeue_tickdiff(q->queue->target, target) <= 0) {
         struct equeue_event *es = q->queue;
         q->queue = es->next;
 
@@ -296,18 +290,14 @@ void equeue_dispatch(equeue_t *q, int ms) {
 
     while (1) {
         // collect all the available events and next deadline
-        struct equeue_event *es = 0;
-        int deadline = -1;
-        if (q->queue) {
-            equeue_mutex_lock(&q->queuelock);
-            es = equeue_dequeue(q, &deadline);
+        equeue_mutex_lock(&q->queuelock);
+        struct equeue_event *es = equeue_dequeue(q);
 
-            // mark events as in-flight
-            for (struct equeue_event *e = es; e; e = e->next) {
-                e->id = -e->id;
-            }
-            equeue_mutex_unlock(&q->queuelock);
+        // mark events as in-flight
+        for (struct equeue_event *e = es; e; e = e->next) {
+            e->id = -e->id;
         }
+        equeue_mutex_unlock(&q->queuelock);
 
         // dispatch events
         while (es) {
@@ -326,25 +316,32 @@ void equeue_dispatch(equeue_t *q, int ms) {
                 e->id = -e->id;
                 equeue_enqueue(q, e, e->period);
                 equeue_mutex_unlock(&q->queuelock);
-
-                equeue_sema_signal(&q->eventsema);
             } else {
                 e->id = equeue_incid(q, -e->id);
                 equeue_dealloc(q, e+1);
             }
         }
 
+        int deadline = -1;
+        unsigned tick = equeue_tick();
+
         // check if we should stop dispatching soon
         if (ms >= 0) {
-            int diff = equeue_tickdiff(timeout, equeue_tick());
-            if (diff <= 0) {
+            deadline = equeue_tickdiff(timeout, tick);
+            if (deadline <= 0) {
                 return;
             }
+        }
 
+        // find closest deadline
+        equeue_mutex_lock(&q->queuelock);
+        if (q->queue) {
+            int diff = equeue_tickdiff(q->queue->target, tick);
             if (deadline < 0 || diff < deadline) {
                 deadline = diff;
             }
         }
+        equeue_mutex_unlock(&q->queuelock);
 
         // wait for events
         equeue_sema_wait(&q->eventsema, deadline);
