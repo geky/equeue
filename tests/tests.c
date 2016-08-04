@@ -92,6 +92,16 @@ void fragment_func(void *p) {
     test_assert(id);
 }
 
+struct cancel {
+    equeue_t *q;
+    int id;
+};
+
+void cancel_func(void *p) {
+    struct cancel *cancel = (struct cancel *)p;
+    equeue_cancel(cancel->q, cancel->id);
+}
+
 
 // Simple call tests
 void simple_call_test(void) {
@@ -194,6 +204,8 @@ void destructor_test(void) {
     for (int i = 0; i < 3; i++) {
         equeue_cancel(&q, ids[i]);
     }
+
+    equeue_dispatch(&q, 0);
     test_assert(touched == 3);
 
     touched = 0;
@@ -244,6 +256,41 @@ void cancel_test(int N) {
     }
 
     free(ids);
+
+    equeue_dispatch(&q, 0);
+    test_assert(!touched);
+
+    equeue_destroy(&q);
+}
+
+void cancel_inflight_test(void) {
+    equeue_t q;
+    int err = equeue_create(&q, 2048);
+    test_assert(!err);
+
+    bool touched = false;
+
+    int id = equeue_call(&q, simple_func, &touched);
+    equeue_cancel(&q, id);
+
+    equeue_dispatch(&q, 0);
+    test_assert(!touched);
+
+    id = equeue_call(&q, simple_func, &touched);
+    equeue_cancel(&q, id);
+
+    equeue_dispatch(&q, 0);
+    test_assert(!touched);
+
+    struct cancel *cancel = equeue_alloc(&q, sizeof(struct cancel));
+    test_assert(cancel);
+    cancel->q = &q;
+    cancel->id = 0;
+
+    id = equeue_post(&q, cancel_func, cancel);
+    test_assert(id);
+
+    cancel->id = equeue_call(&q, simple_func, &touched);
 
     equeue_dispatch(&q, 0);
     test_assert(!touched);
@@ -431,6 +478,7 @@ int main() {
     test_run(destructor_test);
     test_run(allocation_failure_test);
     test_run(cancel_test, 20);
+    test_run(cancel_inflight_test);
     test_run(cancel_unnecessarily_test);
     test_run(loop_protect_test);
     test_run(break_test);

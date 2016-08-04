@@ -35,6 +35,8 @@ int equeue_create_inplace(equeue_t *q, size_t size, void *buffer) {
     q->slab.data = buffer;
 
     q->queue = 0;
+    q->tick = equeue_tick();
+    q->generation = 0;
     q->breaks = 0;
 
     int err;
@@ -158,8 +160,19 @@ static inline int equeue_tickdiff(unsigned a, unsigned b) {
     return (int)(a - b);
 }
 
-static void equeue_enqueue(equeue_t *q, struct equeue_event *e, unsigned ms) {
+static inline void equeue_incid(equeue_t *q, struct equeue_event *e) {
+    e->id += 1;
+    if (e->id >> (8*sizeof(int)-1 - q->npw2)) {
+        e->id = 1;
+    }
+}
+
+static int equeue_enqueue(equeue_t *q, struct equeue_event *e, unsigned ms) {
+    int id = (e->id << q->npw2) | ((unsigned char *)e - q->buffer);
     e->target = equeue_tick() + ms;
+    e->generation = q->generation;
+
+    equeue_mutex_lock(&q->queuelock);
 
     struct equeue_event **p = &q->queue;
     while (*p && equeue_tickdiff((*p)->target, e->target) < 0) {
@@ -185,9 +198,31 @@ static void equeue_enqueue(equeue_t *q, struct equeue_event *e, unsigned ms) {
 
     *p = e;
     e->ref = p;
+
+    equeue_mutex_unlock(&q->queuelock);
+
+    return id;
 }
 
-static void equeue_unqueue(equeue_t *q, struct equeue_event *e) {
+static struct equeue_event *equeue_unqueue(equeue_t *q, int id) {
+    struct equeue_event *e = (struct equeue_event *)
+            &q->buffer[id & ((1 << q->npw2)-1)];
+
+    equeue_mutex_lock(&q->queuelock);
+    if (e->id != id >> q->npw2) {
+        equeue_mutex_unlock(&q->queuelock);
+        return 0;
+    }
+
+    e->cb = 0;
+    e->period = -1;
+
+    int diff = equeue_tickdiff(e->target, q->tick);
+    if (diff < 0 || (diff == 0 && e->generation != q->generation)) {
+        equeue_mutex_unlock(&q->queuelock);
+        return 0;
+    }
+
     if (e->sibling) {
         e->sibling->next = e->next;
         if (e->sibling->next) {
@@ -202,16 +237,41 @@ static void equeue_unqueue(equeue_t *q, struct equeue_event *e) {
             e->next->ref = e->ref;
         }
     }
+
+    equeue_incid(q, e);
+    equeue_mutex_unlock(&q->queuelock);
+
+    return e;
 }
 
-static struct equeue_event *equeue_dequeue(equeue_t *q) {
-    unsigned target = equeue_tick();
-    struct equeue_event *head = 0;
-    struct equeue_event **tail = &head;
+static struct equeue_event *equeue_dequeue(equeue_t *q, unsigned target) {
+    equeue_mutex_lock(&q->queuelock);
 
-    while (q->queue && equeue_tickdiff(q->queue->target, target) <= 0) {
-        struct equeue_event *es = q->queue;
-        q->queue = es->next;
+    q->generation += 1;
+    if (equeue_tickdiff(q->tick, target) <= 0) {
+        q->tick = target;
+    }
+
+    struct equeue_event *head = q->queue;
+    struct equeue_event **p = &head;
+    while (*p && equeue_tickdiff((*p)->target, target) <= 0) {
+        p = &(*p)->next;
+    }
+
+    q->queue = *p;
+    if (q->queue) {
+        q->queue->ref = &q->queue;
+    }
+
+    *p = 0;
+
+    equeue_mutex_unlock(&q->queuelock);
+
+    struct equeue_event **tail = &head;
+    struct equeue_event *ess = head;
+    while (ess) {
+        struct equeue_event *es = ess;
+        ess = es->next;
 
         struct equeue_event *prev = 0;
         for (struct equeue_event *e = es; e; e = e->sibling) {
@@ -223,59 +283,23 @@ static struct equeue_event *equeue_dequeue(equeue_t *q) {
         tail = &es->next;
     }
 
-    if (q->queue) {
-        q->queue->ref = &q->queue;
-    }
-
     return head;
-}
-
-static inline int equeue_incid(equeue_t *q, int id) {
-    if ((id+1) >> (8*sizeof(int)-1 - q->npw2)) {
-        return 1;
-    }
-
-    return id+1;
 }
 
 int equeue_post(equeue_t *q, void (*cb)(void*), void *p) {
     struct equeue_event *e = (struct equeue_event*)p - 1;
-    int id = (e->id << q->npw2) | ((unsigned char *)e - q->buffer);
     e->cb = cb;
 
-    if (e->target < 0) {
-        equeue_dealloc(q, e+1);
-        return id;
-    }
-
-    equeue_mutex_lock(&q->queuelock);
-    equeue_enqueue(q, e, e->target);
-    equeue_mutex_unlock(&q->queuelock);
-
+    int id = equeue_enqueue(q, e, e->target);
     equeue_sema_signal(&q->eventsema);
     return id;
 }
 
 void equeue_cancel(equeue_t *q, int id) {
-    struct equeue_event *e = (struct equeue_event *)
-            &q->buffer[id & ((1 << q->npw2)-1)];
-
-    equeue_mutex_lock(&q->queuelock);
-    if (e->id == -id >> q->npw2) {
-        e->cb = 0;
-        e->period = -1;
+    struct equeue_event *e = equeue_unqueue(q, id);
+    if (e) {
+        equeue_dealloc(q, e + 1);
     }
-
-    if (e->id != id >> q->npw2) {
-        equeue_mutex_unlock(&q->queuelock);
-        return;
-    }
-
-    equeue_unqueue(q, e);
-    e->id = equeue_incid(q, e->id);
-    equeue_mutex_unlock(&q->queuelock);
-
-    equeue_dealloc(q, e+1);
 }
 
 void equeue_break(equeue_t *q) {
@@ -286,18 +310,12 @@ void equeue_break(equeue_t *q) {
 }
 
 void equeue_dispatch(equeue_t *q, int ms) {
-    unsigned timeout = equeue_tick() + ms;
+    unsigned tick = equeue_tick();
+    unsigned timeout = tick + ms;
 
     while (1) {
         // collect all the available events and next deadline
-        equeue_mutex_lock(&q->queuelock);
-        struct equeue_event *es = equeue_dequeue(q);
-
-        // mark events as in-flight
-        for (struct equeue_event *e = es; e; e = e->next) {
-            e->id = -e->id;
-        }
-        equeue_mutex_unlock(&q->queuelock);
+        struct equeue_event *es = equeue_dequeue(q, tick);
 
         // dispatch events
         while (es) {
@@ -310,20 +328,17 @@ void equeue_dispatch(equeue_t *q, int ms) {
                 cb(e + 1);
             }
 
-            // undirty the id and either dealloc or reenqueue periodic events
+            // reenqueue periodic events or deallocate
             if (e->period >= 0) {
-                equeue_mutex_lock(&q->queuelock);
-                e->id = -e->id;
                 equeue_enqueue(q, e, e->period);
-                equeue_mutex_unlock(&q->queuelock);
             } else {
-                e->id = equeue_incid(q, -e->id);
+                equeue_incid(q, e);
                 equeue_dealloc(q, e+1);
             }
         }
 
         int deadline = -1;
-        unsigned tick = equeue_tick();
+        tick = equeue_tick();
 
         // check if we should stop dispatching soon
         if (ms >= 0) {
@@ -356,6 +371,9 @@ void equeue_dispatch(equeue_t *q, int ms) {
             }
             equeue_mutex_unlock(&q->queuelock);
         }
+
+        // update tick for next iteration
+        tick = equeue_tick();
     }
 }
 

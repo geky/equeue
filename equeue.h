@@ -17,6 +17,7 @@ extern "C" {
 #include "equeue_sema.h"
 
 #include <stddef.h>
+#include <stdint.h>
 
 
 // Definition of the minimum size of an event
@@ -26,7 +27,9 @@ extern "C" {
 // Event/queue structures
 struct equeue_event {
     unsigned size;
-    int id;
+    uint8_t id;
+    uint8_t generation;
+
     struct equeue_event *next;
     struct equeue_event *sibling;
     struct equeue_event **ref;
@@ -41,7 +44,9 @@ struct equeue_event {
 
 typedef struct equeue {
     struct equeue_event *queue;
-    int breaks;
+    unsigned tick;
+    unsigned breaks;
+    uint8_t generation;
 
     unsigned char *buffer;
     unsigned npw2;
