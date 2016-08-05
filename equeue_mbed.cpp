@@ -52,12 +52,11 @@ int equeue_mutex_create(equeue_mutex_t *m) { return 0; }
 void equeue_mutex_destroy(equeue_mutex_t *m) { }
 
 void equeue_mutex_lock(equeue_mutex_t *m) {
-    *m = __get_PRIMASK();
-    __disable_irq();
+    core_util_critical_section_enter();
 }
 
 void equeue_mutex_unlock(equeue_mutex_t *m) {
-    __set_PRIMASK(*m);
+    core_util_critical_section_exit();
 }
 
 
