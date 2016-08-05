@@ -25,7 +25,7 @@ typedef sem_t equeue_sema_t;
 #ifdef MBED_CONF_RTOS_PRESENT
 typedef void *equeue_sema_t;
 #else
-typedef struct {} equeue_sema_t;
+typedef bool equeue_sema_t;
 #endif
 #endif
 

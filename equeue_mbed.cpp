@@ -88,17 +88,30 @@ bool equeue_sema_wait(equeue_sema_t *s, int ms) {
 #else
 
 // Semaphore operations
-int equeue_sema_create(equeue_sema_t *s) { return 0; }
-void equeue_sema_destroy(equeue_sema_t *s) {}
-void equeue_sema_signal(equeue_sema_t *s) {}
+int equeue_sema_create(equeue_sema_t *s) {
+    *s = false;
+    return 0;
+}
 
-static void equeue_sema_wakeup() {}
+void equeue_sema_destroy(equeue_sema_t *s) {
+}
+
+void equeue_sema_signal(equeue_sema_t *s) {
+    *s = true;
+}
 
 bool equeue_sema_wait(equeue_sema_t *s, int ms) {
     Timeout timeout;
-    timeout.attach_us(equeue_sema_wakeup, ms*1000);
+    timeout.attach_us(s, equeue_sema_signal, ms*1000);
 
-    __WFI();
+    core_util_critical_section_enter();
+    while (!*(volatile equeue_sema_t *)s) {
+        __WFI();
+        core_util_critical_section_exit();
+        core_util_critical_section_enter();
+    }
+    *s = false;
+    core_util_critical_section_exit();
 
     return true;
 }
