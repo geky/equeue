@@ -46,6 +46,11 @@ void simple_func(void *p) {
     (*(int *)p)++;
 }
 
+void sloth_func(void *p) {
+    usleep(10000);
+    (*(int *)p)++;
+}
+
 struct indirect {
     int *touched;
     uint8_t buffer[7];
@@ -100,6 +105,19 @@ struct cancel {
 void cancel_func(void *p) {
     struct cancel *cancel = (struct cancel *)p;
     equeue_cancel(cancel->q, cancel->id);
+}
+
+struct nest {
+    equeue_t *q;
+    void (*cb)(void *);
+    void *data;
+};
+
+void nest_func(void *p) {
+    struct nest *nest = (struct nest *)p;
+    equeue_call(nest->q, nest->cb, nest->data);
+
+    usleep(10000);
 }
 
 
@@ -375,6 +393,92 @@ void period_test(void) {
     equeue_destroy(&q);
 }
 
+void nested_test(void) {
+    equeue_t q;
+    int err = equeue_create(&q, 2048);
+    test_assert(!err);
+
+    int touched = 0;
+    struct nest *nest = equeue_alloc(&q, sizeof(struct nest));
+    test_assert(nest);
+    nest->q = &q;
+    nest->cb = simple_func;
+    nest->data = &touched;
+
+    int id = equeue_post(&q, nest_func, nest);
+    test_assert(id);
+
+    equeue_dispatch(&q, 5);
+    test_assert(touched == 0);
+
+    equeue_dispatch(&q, 5);
+    test_assert(touched == 1);
+
+    touched = 0;
+    nest = equeue_alloc(&q, sizeof(struct nest));
+    test_assert(nest);
+    nest->q = &q;
+    nest->cb = simple_func;
+    nest->data = &touched;
+
+    id = equeue_post(&q, nest_func, nest);
+    test_assert(id);
+
+    equeue_dispatch(&q, 20);
+    test_assert(touched == 1);
+
+    equeue_destroy(&q);
+}
+
+void sloth_test(void) {
+    equeue_t q;
+    int err = equeue_create(&q, 2048);
+    test_assert(!err);
+
+    int touched = 0;
+    int id = equeue_call(&q, sloth_func, &touched);
+    test_assert(id);
+
+    id = equeue_call_in(&q, 5, simple_func, &touched);
+    test_assert(id);
+
+    id = equeue_call_in(&q, 15, simple_func, &touched);
+    test_assert(id);
+
+    equeue_dispatch(&q, 20);
+    test_assert(touched == 3);
+
+    equeue_destroy(&q);
+}
+
+void *multithread_thread(void *p) {
+    equeue_t *q = (equeue_t *)p;
+    equeue_dispatch(q, -1);
+    return 0;
+}
+
+void multithread_test(void) {
+    equeue_t q;
+    int err = equeue_create(&q, 2048);
+    test_assert(!err);
+
+    bool touched = false;
+    equeue_call_every(&q, 1, simple_func, &touched);
+
+    pthread_t thread;
+    err = pthread_create(&thread, 0, multithread_thread, &q);
+    test_assert(!err);
+
+    usleep(10000);
+    equeue_break(&q);
+    err = pthread_join(thread, 0);
+    test_assert(!err);
+
+    test_assert(touched);
+
+    equeue_destroy(&q);
+}
+
 // Barrage tests
 void simple_barrage_test(int N) {
     equeue_t q;
@@ -483,6 +587,9 @@ int main() {
     test_run(loop_protect_test);
     test_run(break_test);
     test_run(period_test);
+    test_run(nested_test);
+    test_run(sloth_test);
+    test_run(multithread_test);
     test_run(simple_barrage_test, 20);
     test_run(fragmenting_barrage_test, 20);
     test_run(multithreaded_barrage_test, 20);

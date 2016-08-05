@@ -352,7 +352,9 @@ void equeue_dispatch(equeue_t *q, int ms) {
         equeue_mutex_lock(&q->queuelock);
         if (q->queue) {
             int diff = equeue_tickdiff(q->queue->target, tick);
-            if (deadline < 0 || diff < deadline) {
+            if (diff <= 0) {
+                deadline = 0;
+            } else if (deadline < 0 || diff < deadline) {
                 deadline = diff;
             }
         }
