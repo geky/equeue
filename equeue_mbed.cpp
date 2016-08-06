@@ -63,26 +63,26 @@ void equeue_mutex_unlock(equeue_mutex_t *m) {
 // Semaphore operations
 #ifdef MBED_CONF_RTOS_PRESENT
 
-static inline Semaphore *sema(equeue_sema_t *s) {
-    return static_cast<Semaphore*>(*s);
-}
-
 int equeue_sema_create(equeue_sema_t *s) {
-    *s = new Semaphore(0);
-    return sema(s) ? 0 : -1;
+    MBED_ASSERT(sizeof(equeue_sema_t) >= sizeof(Semaphore));
+    new (s) Semaphore(0);
+    return 0;
 }
 
 void equeue_sema_destroy(equeue_sema_t *s) {
-    delete sema(s);
+    reinterpret_cast<Semaphore*>(s)->~Semaphore();
 }
 
 void equeue_sema_signal(equeue_sema_t *s) {
-    sema(s)->release();
+    reinterpret_cast<Semaphore*>(s)->release();
 }
 
 bool equeue_sema_wait(equeue_sema_t *s, int ms) {
-    int t = sema(s)->wait(ms < 0 ? osWaitForever : ms);
-    return t > 0;
+    if (ms < 0) {
+        ms = osWaitForever;
+    }
+
+    return (reinterpret_cast<Semaphore*>(s)->wait(ms) > 0);
 }
 
 #else
