@@ -13,21 +13,18 @@
 
 #include <stdbool.h>
 #include "mbed.h"
-#ifdef MBED_CONF_RTOS_PRESENT
-#include "rtos.h"
-#endif
 
 
 // Ticker operations
-static class GlobalTicker {
+class EqueueTicker {
 public:
-    GlobalTicker() {
+    EqueueTicker() {
         _tick = 0;
         _timer.start();
-        _ticker.attach_us(this, &GlobalTicker::step, (1 << 16) * 1000);
+        _ticker.attach_us(this, &EqueueTicker::update, (1 << 16) * 1000);
     };
 
-    void step() {
+    void update() {
         _timer.reset();
         _tick += 1 << 16;
     }
@@ -38,12 +35,19 @@ public:
 
 private:
     unsigned _tick;
+#ifdef DEVICE_LOWPOWERTIMER
+    LowPowerTimer _timer;
+    LowPowerTicker _ticker;
+#else
     Timer _timer;
     Ticker _ticker;
-} gticker;
+#endif
+};
+
+static EqueueTicker equeue_ticker;
 
 unsigned equeue_tick() {
-    return gticker.tick();
+    return equeue_ticker.tick();
 }
 
 
