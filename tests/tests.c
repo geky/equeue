@@ -479,6 +479,37 @@ void multithread_test(void) {
     equeue_destroy(&q);
 }
 
+void background_func(void *p, int ms) {
+    *(unsigned *)p = ms;
+}
+
+void background_test(void) {
+    equeue_t q;
+    int err = equeue_create(&q, 2048);
+    test_assert(!err);
+
+    int id = equeue_call_in(&q, 20, pass_func, 0);
+    test_assert(id);
+
+    unsigned ms;
+    equeue_background(&q, background_func, &ms);
+    test_assert(ms == 20);
+
+    id = equeue_call_in(&q, 10, pass_func, 0);
+    test_assert(id);
+    test_assert(ms == 10);
+
+    id = equeue_call(&q, pass_func, 0);
+    test_assert(id);
+    test_assert(ms == 0);
+
+    equeue_dispatch(&q, 0);
+    test_assert(ms == 10);
+
+    equeue_destroy(&q);
+    test_assert(ms == -1);
+}
+
 // Barrage tests
 void simple_barrage_test(int N) {
     equeue_t q;
@@ -589,6 +620,7 @@ int main() {
     test_run(period_test);
     test_run(nested_test);
     test_run(sloth_test);
+    test_run(background_test);
     test_run(multithread_test);
     test_run(simple_barrage_test, 20);
     test_run(fragmenting_barrage_test, 20);

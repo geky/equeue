@@ -58,6 +58,12 @@ typedef struct equeue {
         unsigned char *data;
     } slab;
 
+    struct equeue_background {
+        bool active;
+        void (*update)(void *timer, int ms);
+        void *timer;
+    } background;
+
     equeue_sema_t eventsema;
     equeue_mutex_t queuelock;
     equeue_mutex_t memlock;
@@ -135,6 +141,14 @@ int equeue_post(equeue_t *queue, void (*cb)(void *), void *event);
 // been dispatched or does not exist, no error occurs. Note, this can not
 // stop a currently executing event
 void equeue_cancel(equeue_t *queue, int event);
+
+// Background an event queue onto a single-shot timer
+//
+// The provided update function will be called to indicate when the queue
+// should be dispatched. A negative timeout will be passed to the update
+// function when the timer is no longer needed.
+void equeue_background(equeue_t *queue,
+        void (*update)(void *timer, int ms), void *timer);
 
 
 #ifdef __cplusplus
