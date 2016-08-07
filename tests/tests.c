@@ -510,6 +510,43 @@ void background_test(void) {
     test_assert(ms == -1);
 }
 
+void chain_test(void) {
+    equeue_t q1;
+    int err = equeue_create(&q1, 2048);
+    test_assert(!err);
+
+    equeue_t q2;
+    err = equeue_create(&q2, 2048);
+    test_assert(!err);
+
+    equeue_chain(&q2, &q1);
+
+    int touched = 0;
+
+    int id1 = equeue_call_in(&q1, 20, simple_func, &touched);
+    int id2 = equeue_call_in(&q2, 20, simple_func, &touched);
+    test_assert(id1 && id2);
+
+    id1 = equeue_call(&q1, simple_func, &touched);
+    id2 = equeue_call(&q2, simple_func, &touched);
+    test_assert(id1 && id2);
+
+    id1 = equeue_call_in(&q1, 5, simple_func, &touched);
+    id2 = equeue_call_in(&q2, 5, simple_func, &touched);
+    test_assert(id1 && id2);
+
+    equeue_cancel(&q1, id1);
+    equeue_cancel(&q2, id2);
+
+    id1 = equeue_call_in(&q1, 10, simple_func, &touched);
+    id2 = equeue_call_in(&q2, 10, simple_func, &touched);
+    test_assert(id1 && id2);
+
+    equeue_dispatch(&q1, 30);
+
+    test_assert(touched == 6);
+}
+
 // Barrage tests
 void simple_barrage_test(int N) {
     equeue_t q;
@@ -621,6 +658,7 @@ int main() {
     test_run(nested_test);
     test_run(sloth_test);
     test_run(background_test);
+    test_run(chain_test);
     test_run(multithread_test);
     test_run(simple_barrage_test, 20);
     test_run(fragmenting_barrage_test, 20);

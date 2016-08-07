@@ -484,3 +484,35 @@ void equeue_background(equeue_t *q,
     q->background.active = true;
     equeue_mutex_unlock(&q->queuelock);
 }
+
+struct equeue_chain_context {
+    equeue_t *q;
+    equeue_t *target;
+    int id;
+};
+
+static void equeue_chain_dispatch(void *p) {
+    equeue_dispatch((equeue_t *)p, 0);
+}
+
+static void equeue_chain_update(void *p, int ms) {
+    struct equeue_chain_context *c = (struct equeue_chain_context *)p;
+    equeue_cancel(c->target, c->id);
+
+    if (ms >= 0) {
+        c->id = equeue_call_in(c->target, ms, equeue_chain_dispatch, c->q);
+    } else {
+        equeue_dealloc(c->target, c);
+    }
+}
+
+void equeue_chain(equeue_t *q, equeue_t *target) {
+    struct equeue_chain_context *c = equeue_alloc(q,
+            sizeof(struct equeue_chain_context));
+
+    c->q = q;
+    c->target = target;
+    c->id = 0;
+
+    equeue_background(q, equeue_chain_update, c);
+}

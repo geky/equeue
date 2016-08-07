@@ -146,9 +146,18 @@ void equeue_cancel(equeue_t *queue, int event);
 //
 // The provided update function will be called to indicate when the queue
 // should be dispatched. A negative timeout will be passed to the update
-// function when the timer is no longer needed.
+// function when the timer is no longer needed. A null update function
+// will disable the existing timer.
 void equeue_background(equeue_t *queue,
         void (*update)(void *timer, int ms), void *timer);
+
+// Chain an event queue onto another event queue
+//
+// After chaining a queue to a target, calling equeue_dispatch on the
+// target queue will also dispatch events from this queue. The queues
+// will use their own buffers and events are handled independently.
+// A null queue as the target will unchain this queue.
+void equeue_chain(equeue_t *queue, equeue_t *target);
 
 
 #ifdef __cplusplus
