@@ -39,6 +39,10 @@ int equeue_create_inplace(equeue_t *q, size_t size, void *buffer) {
     q->generation = 0;
     q->breaks = 0;
 
+    q->background.active = false;
+    q->background.update = 0;
+    q->background.timer = 0;
+
     int err;
     err = equeue_sema_create(&q->eventsema);
     if (err < 0) {
@@ -66,6 +70,10 @@ void equeue_destroy(equeue_t *q) {
                 e->dtor(e + 1);
             }
         }
+    }
+
+    if (q->background.update) {
+        q->background.update(q->background.timer, -1);
     }
 
     equeue_mutex_destroy(&q->memlock);
@@ -199,6 +207,11 @@ static int equeue_enqueue(equeue_t *q, struct equeue_event *e, unsigned ms) {
     *p = e;
     e->ref = p;
 
+    if ((q->background.update && q->background.active) &&
+        (q->queue == e && !e->sibling)) {
+        q->background.update(q->background.timer, ms);
+    }
+
     equeue_mutex_unlock(&q->queuelock);
 
     return id;
@@ -312,6 +325,7 @@ void equeue_break(equeue_t *q) {
 void equeue_dispatch(equeue_t *q, int ms) {
     unsigned tick = equeue_tick();
     unsigned timeout = tick + ms;
+    q->background.active = false;
 
     while (1) {
         // collect all the available events and next deadline
@@ -344,6 +358,16 @@ void equeue_dispatch(equeue_t *q, int ms) {
         if (ms >= 0) {
             deadline = equeue_tickdiff(timeout, tick);
             if (deadline <= 0) {
+                // update background timer if necessary
+                if (q->background.update) {
+                    equeue_mutex_lock(&q->queuelock);
+                    if (q->background.update && q->queue) {
+                        q->background.update(q->background.timer,
+                                equeue_tickdiff(q->queue->target, tick));
+                    }
+                    q->background.active = true;
+                    equeue_mutex_unlock(&q->queuelock);
+                }
                 return;
             }
         }
@@ -440,4 +464,55 @@ int equeue_call_every(equeue_t *q, int ms, void (*cb)(void*), void *data) {
     e->cb = cb;
     e->data = data;
     return equeue_post(q, ecallback_dispatch, e);
+}
+
+// backgrounding
+void equeue_background(equeue_t *q,
+        void (*update)(void *timer, int ms), void *timer) {
+    equeue_mutex_lock(&q->queuelock);
+    if (q->background.update) {
+        q->background.update(q->background.timer, -1);
+    }
+
+    q->background.update = update;
+    q->background.timer = timer;
+
+    if (q->background.update && q->queue) {
+        q->background.update(q->background.timer,
+                equeue_tickdiff(q->queue->target, equeue_tick()));
+    }
+    q->background.active = true;
+    equeue_mutex_unlock(&q->queuelock);
+}
+
+struct equeue_chain_context {
+    equeue_t *q;
+    equeue_t *target;
+    int id;
+};
+
+static void equeue_chain_dispatch(void *p) {
+    equeue_dispatch((equeue_t *)p, 0);
+}
+
+static void equeue_chain_update(void *p, int ms) {
+    struct equeue_chain_context *c = (struct equeue_chain_context *)p;
+    equeue_cancel(c->target, c->id);
+
+    if (ms >= 0) {
+        c->id = equeue_call_in(c->target, ms, equeue_chain_dispatch, c->q);
+    } else {
+        equeue_dealloc(c->target, c);
+    }
+}
+
+void equeue_chain(equeue_t *q, equeue_t *target) {
+    struct equeue_chain_context *c = equeue_alloc(q,
+            sizeof(struct equeue_chain_context));
+
+    c->q = q;
+    c->target = target;
+    c->id = 0;
+
+    equeue_background(q, equeue_chain_update, c);
 }

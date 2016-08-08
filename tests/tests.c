@@ -479,6 +479,74 @@ void multithread_test(void) {
     equeue_destroy(&q);
 }
 
+void background_func(void *p, int ms) {
+    *(unsigned *)p = ms;
+}
+
+void background_test(void) {
+    equeue_t q;
+    int err = equeue_create(&q, 2048);
+    test_assert(!err);
+
+    int id = equeue_call_in(&q, 20, pass_func, 0);
+    test_assert(id);
+
+    unsigned ms;
+    equeue_background(&q, background_func, &ms);
+    test_assert(ms == 20);
+
+    id = equeue_call_in(&q, 10, pass_func, 0);
+    test_assert(id);
+    test_assert(ms == 10);
+
+    id = equeue_call(&q, pass_func, 0);
+    test_assert(id);
+    test_assert(ms == 0);
+
+    equeue_dispatch(&q, 0);
+    test_assert(ms == 10);
+
+    equeue_destroy(&q);
+    test_assert(ms == -1);
+}
+
+void chain_test(void) {
+    equeue_t q1;
+    int err = equeue_create(&q1, 2048);
+    test_assert(!err);
+
+    equeue_t q2;
+    err = equeue_create(&q2, 2048);
+    test_assert(!err);
+
+    equeue_chain(&q2, &q1);
+
+    int touched = 0;
+
+    int id1 = equeue_call_in(&q1, 20, simple_func, &touched);
+    int id2 = equeue_call_in(&q2, 20, simple_func, &touched);
+    test_assert(id1 && id2);
+
+    id1 = equeue_call(&q1, simple_func, &touched);
+    id2 = equeue_call(&q2, simple_func, &touched);
+    test_assert(id1 && id2);
+
+    id1 = equeue_call_in(&q1, 5, simple_func, &touched);
+    id2 = equeue_call_in(&q2, 5, simple_func, &touched);
+    test_assert(id1 && id2);
+
+    equeue_cancel(&q1, id1);
+    equeue_cancel(&q2, id2);
+
+    id1 = equeue_call_in(&q1, 10, simple_func, &touched);
+    id2 = equeue_call_in(&q2, 10, simple_func, &touched);
+    test_assert(id1 && id2);
+
+    equeue_dispatch(&q1, 30);
+
+    test_assert(touched == 6);
+}
+
 // Barrage tests
 void simple_barrage_test(int N) {
     equeue_t q;
@@ -589,6 +657,8 @@ int main() {
     test_run(period_test);
     test_run(nested_test);
     test_run(sloth_test);
+    test_run(background_test);
+    test_run(chain_test);
     test_run(multithread_test);
     test_run(simple_barrage_test, 20);
     test_run(fragmenting_barrage_test, 20);
