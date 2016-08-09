@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-// System specific files
+// Platform specific files
 #include "equeue_tick.h"
 #include "equeue_mutex.h"
 #include "equeue_sema.h"
@@ -20,11 +20,11 @@ extern "C" {
 #include <stdint.h>
 
 
-// Definition of the minimum size of an event
-// This size fits the events created in the event_call set of functions.
+// The minimum size of an event
+// This size is garunteed to fit events created by event_call
 #define EQUEUE_EVENT_SIZE (sizeof(struct equeue_event) + 2*sizeof(void*))
 
-// Event/queue structures
+// Internal event structure
 struct equeue_event {
     unsigned size;
     uint8_t id;
@@ -42,6 +42,7 @@ struct equeue_event {
     // data follows
 };
 
+// Event queue structure
 typedef struct equeue {
     struct equeue_event *queue;
     unsigned tick;
@@ -70,84 +71,121 @@ typedef struct equeue {
 } equeue_t;
 
 
-// Queue operations
+// Queue lifetime operations
 //
-// Creation results in negative value on failure.
+// Creates and destroys an event queue. The event queue either allocates a
+// buffer of the specified size with malloc or uses a user provided buffer
+// if constructed with equeue_create_inplace.
+//
+// If the event queue creation fails, equeue_create returns a negative,
+// platform-specific error code.
 int equeue_create(equeue_t *queue, size_t size);
 int equeue_create_inplace(equeue_t *queue, size_t size, void *buffer);
 void equeue_destroy(equeue_t *queue);
 
 // Dispatch events
 //
-// Executes any callbacks enqueued for the specified time in milliseconds,
-// or forever if ms is negative
+// Executes events until the specified milliseconds have passed. If ms is
+// negative, equeue_dispatch will dispatch events indefinitely or until
+// equeue_break is called on this queue.
+//
+// When called with a finite timeout, the equeue_dispatch function is garunteed
+// to terminate. When called with a timeout of 0, the equeue_dispatch does not
+// wait and is irq safe.
 void equeue_dispatch(equeue_t *queue, int ms);
 
-// Break a running event loop
+// Break out of a running event loop
 //
-// Shuts down an unbounded event loop. Already pending events may finish
-// executing, but the queue will not continue looping indefinitely.
+// Forces the specified event queue's dispatch loop to terminate. Pending
+// events may finish executing, but no new events will be executed.
 void equeue_break(equeue_t *queue);
 
 // Simple event calls
 //
-// Passed callback will be executed in the associated equeue's
-// dispatch call with the data pointer passed unmodified
+// The specified callback will be executed in the context of the event queue's
+// dispatch loop. When the callback is executed depends on the call function.
 //
 // equeue_call       - Immediately post an event to the queue
 // equeue_call_in    - Post an event after a specified time in milliseconds
-// equeue_call_every - Post an event periodically in milliseconds
+// equeue_call_every - Post an event periodically every milliseconds
 //
-// These calls will result in 0 if no memory is available, otherwise they
-// will result in a unique identifier that can be passed to equeue_cancel.
+// All equeue_call functions are irq safe and can act as a mechanism for
+// moving events out of irq contexts.
+//
+// The return value is a unique id that represents the posted event and can
+// be passed to equeue_cancel. If there is not enough memory to allocate the
+// event, equeue_call returns an id of 0.
 int equeue_call(equeue_t *queue, void (*cb)(void *), void *data);
 int equeue_call_in(equeue_t *queue, int ms, void (*cb)(void *), void *data);
 int equeue_call_every(equeue_t *queue, int ms, void (*cb)(void *), void *data);
 
-// Events with queue handled blocks of memory
+// Allocate memory for events
 //
-// Argument to equeue_post must point to a result of a equeue_alloc call
-// and the associated memory is automatically freed after the event
-// is dispatched.
+// The equeue_alloc function allocates an event that can be manually dispatched
+// with equeue_post. The equeue_dealloc function may be used to free an event
+// that has not been posted. Once posted, an event's memory is managed by the
+// event queue and should not be deallocated.
 //
-// equeue_alloc will result in null if no memory is available
-// or the requested size is less than the size passed to equeue_create.
+// Both equeue_alloc and equeue_dealloc are irq safe.
+//
+// The equeue allocator is designed to minimize jitter in interrupt contexts as
+// well as avoid memory fragmentation on small devices. The allocator achieves
+// both constant-runtime and zero-fragmentation for fixed-size events, however
+// grows linearly as the quantity of different sized allocations increases.
+//
+// The equeue_alloc function returns a pointer to the event's allocated memory
+// and acts as a handle to the underlying event. If there is not enough memory
+// to allocate the event, equeue_alloc returns null.
 void *equeue_alloc(equeue_t *queue, size_t size);
 void equeue_dealloc(equeue_t *queue, void *event);
 
 // Configure an allocated event
-// 
-// equeue_event_delay  - Millisecond delay before posting an event
-// equeue_event_period - Millisecond period to repeatedly post an event
+//
+// equeue_event_delay  - Millisecond delay before dispatching an event
+// equeue_event_period - Millisecond period for repeating dispatching an event
 // equeue_event_dtor   - Destructor to run when the event is deallocated
 void equeue_event_delay(void *event, int ms);
 void equeue_event_period(void *event, int ms);
 void equeue_event_dtor(void *event, void (*dtor)(void *));
 
-// Post an allocted event to the event queue
+// Post an event onto the event queue
 //
-// Argument to equeue_post must point to a result of a equeue_alloc call
-// and the associated memory is automatically freed after the event
-// is dispatched.
+// The equeue_post function takes a callback and a pointer to an event
+// allocated by equeue_alloc. The specified callback will be executed in the
+// context of the event queue's dispatch loop with the allocated event
+// as its argument.
 //
-// This call results in an unique identifier that can be passed to
-// equeue_cancel.
+// The equeue_post function is irq safe and can act as a mechanism for
+// moving events out of irq contexts.
+//
+// The return value is a unique id that represents the posted event and can
+// be passed to equeue_cancel.
 int equeue_post(equeue_t *queue, void (*cb)(void *), void *event);
 
-// Cancel events that are in flight
+// Cancel an in-flight event
 //
-// Every equeue_call function returns a non-negative identifier on success
-// that can be used to cancel an in-flight event. If the event has already
-// been dispatched or does not exist, no error occurs. Note, this can not
-// stop a currently executing event
-void equeue_cancel(equeue_t *queue, int event);
+// Attempts to cancel an event referenced by the unique id returned from
+// equeue_call or equeue_post. It is safe to call equeue_cancel after an event
+// has already been dispatched.
+//
+// The equeue_cancel function is irq safe.
+//
+// If called while the event queue's dispatch loop is active, equeue_cancel
+// does not garuntee that the event will not not execute after it returns as
+// the event may have already begun executing.
+void equeue_cancel(equeue_t *queue, int id);
 
 // Background an event queue onto a single-shot timer
 //
 // The provided update function will be called to indicate when the queue
 // should be dispatched. A negative timeout will be passed to the update
-// function when the timer is no longer needed. A null update function
-// will disable the existing timer.
+// function when the timer is no longer needed.
+//
+// Passing a null update function disables the existing timer.
+//
+// The equeue_background function allows an event queue to take advantage
+// of hardware timers or even other event loops, allowing an event queue to
+// be effectively backgrounded.
 void equeue_background(equeue_t *queue,
         void (*update)(void *timer, int ms), void *timer);
 
@@ -155,8 +193,12 @@ void equeue_background(equeue_t *queue,
 //
 // After chaining a queue to a target, calling equeue_dispatch on the
 // target queue will also dispatch events from this queue. The queues
-// will use their own buffers and events are handled independently.
-// A null queue as the target will unchain this queue.
+// use their own buffers and events must be managed independently.
+//
+// Passing a null queue as the target will unchain the existing queue.
+//
+// The equeue_chain function allows multiple equeues to be composed, sharing
+// the context of a dispatch loop while still being managed independtly.
 void equeue_chain(equeue_t *queue, equeue_t *target);
 
 

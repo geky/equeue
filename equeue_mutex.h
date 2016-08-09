@@ -12,11 +12,13 @@ extern "C" {
 #endif
 
 
-// Mutex type
+// Platform mutex type
 //
-// If this type is safe in interrupt contexts, then
-// the associated event queue will also be safe in
-// interrupt contexts.
+// The equeue library requires at minimum a non-recursive mutex that is
+// safe in interrupt contexts. The mutex section is help for a bounded
+// amount of time, so simply disabling interrupts is acceptable
+//
+// If irq safety is not required, a regular blocking mutex can be used.
 #if defined(__unix__)
 #include <pthread.h>
 typedef pthread_mutex_t equeue_mutex_t;
@@ -25,7 +27,14 @@ typedef unsigned equeue_mutex_t;
 #endif
 
 
-// Mutex operations
+// Platform mutex operations
+//
+// The equeue_mutex_create and equeue_mutex_destroy manage the lifetime
+// of the mutex. On error, equeue_mutex_create should return a negative
+// error code.
+//
+// The equeue_mutex_lock and equeue_mutex_unlock lock and unlock the
+// underlying mutex.
 int equeue_mutex_create(equeue_mutex_t *mutex);
 void equeue_mutex_destroy(equeue_mutex_t *mutex);
 void equeue_mutex_lock(equeue_mutex_t *mutex);

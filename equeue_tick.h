@@ -12,10 +12,14 @@ extern "C" {
 #endif
 
 
-// Monotonic tick
+// Platform millisecond counter
 //
-// Returns a tick that is incremented every millisecond,
-// must intentionally overflow to 0 after 2^32-1
+// Return a tick that represents the number of milliseconds that have passed
+// since an arbitrary point in time. The granularity does not need to be at
+// the millisecond level, however the accuracy of the equeue library is
+// limited by the accuracy of this tick.
+//
+// Must intentionally overflow to 0 after 2^32-1
 unsigned equeue_tick(void);
 
 
