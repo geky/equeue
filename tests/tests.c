@@ -462,7 +462,7 @@ void multithread_test(void) {
     int err = equeue_create(&q, 2048);
     test_assert(!err);
 
-    bool touched = false;
+    int touched = 0;
     equeue_call_every(&q, 1, simple_func, &touched);
 
     pthread_t thread;

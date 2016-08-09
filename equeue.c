@@ -168,6 +168,11 @@ static inline int equeue_tickdiff(unsigned a, unsigned b) {
     return (int)(a - b);
 }
 
+static inline int equeue_clampdiff(unsigned a, unsigned b) {
+    int diff = equeue_tickdiff(a, b);
+    return ~(diff >> (8*sizeof(int)-1)) & diff;
+}
+
 static inline void equeue_incid(equeue_t *q, struct equeue_event *e) {
     e->id += 1;
     if (e->id >> (8*sizeof(int)-1 - q->npw2)) {
@@ -302,6 +307,7 @@ static struct equeue_event *equeue_dequeue(equeue_t *q, unsigned target) {
 int equeue_post(equeue_t *q, void (*cb)(void*), void *p) {
     struct equeue_event *e = (struct equeue_event*)p - 1;
     e->cb = cb;
+    e->target = equeue_clampdiff(e->target, 0);
 
     int id = equeue_enqueue(q, e, e->target);
     equeue_sema_signal(&q->eventsema);
@@ -363,7 +369,7 @@ void equeue_dispatch(equeue_t *q, int ms) {
                     equeue_mutex_lock(&q->queuelock);
                     if (q->background.update && q->queue) {
                         q->background.update(q->background.timer,
-                                equeue_tickdiff(q->queue->target, tick));
+                                equeue_clampdiff(q->queue->target, tick));
                     }
                     q->background.active = true;
                     equeue_mutex_unlock(&q->queuelock);
@@ -375,10 +381,8 @@ void equeue_dispatch(equeue_t *q, int ms) {
         // find closest deadline
         equeue_mutex_lock(&q->queuelock);
         if (q->queue) {
-            int diff = equeue_tickdiff(q->queue->target, tick);
-            if (diff <= 0) {
-                deadline = 0;
-            } else if (deadline < 0 || diff < deadline) {
+            int diff = equeue_clampdiff(q->queue->target, tick);
+            if ((unsigned)diff < (unsigned)deadline) {
                 deadline = diff;
             }
         }
@@ -479,7 +483,7 @@ void equeue_background(equeue_t *q,
 
     if (q->background.update && q->queue) {
         q->background.update(q->background.timer,
-                equeue_tickdiff(q->queue->target, equeue_tick()));
+                equeue_clampdiff(q->queue->target, equeue_tick()));
     }
     q->background.active = true;
     equeue_mutex_unlock(&q->queuelock);
