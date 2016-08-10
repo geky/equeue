@@ -1,15 +1,11 @@
 ## The equeue library ##
 
 The equeue library is designed as a simple but powerful library for scheduling
-events on composable event queues.
+events on composable queues.
 
 ``` c
 #include "equeue.h"
 #include <stdio.h>
-
-void print(void *s) {
-    puts((const char *)s);
-}
 
 int main() {
     // creates a queue with space for 32 basic events
@@ -31,9 +27,9 @@ int main() {
 ```
 
 The equeue library can be used as a normal event loop, or it can be
-backgrounded on a single hardware timer or even another event loop.
-The equeue library is both thread and irq safe, and provides functions
-for easily composing multiple queues.
+backgrounded on a single hardware timer or even another event loop. It
+is both thread and irq safe, and provides functions for easily composing
+multiple queues.
 
 The equeue library can act as a drop-in scheduler, provide synchronization
 between multiple threads, or just act as a mechanism for moving events
@@ -41,16 +37,16 @@ out of interrupt contexts.
 
 ## Documentation ##
 
-Unless it is elaborated, the in-depth documentation of the specific functions
-can be found in [equeue.h](equeue.h).
+The in-depth documentation on specific functions can be found in
+[equeue.h](equeue.h).
 
 The core of the equeue library is the `equeue_t` type which represents a
-single event queue, and the `equeue_dispath` function which runs the equeue,
+single event queue, and the `equeue_dispatch` function which runs the equeue,
 providing the context for executing events.
 
 On top of this, `equeue_call`, `equeue_call_in`, and `equeue_call_every`
-provide an easy method of posting events to be executed in the context
-of the `equeue_dispatch` function.
+provide easy methods for posting events to execute in the context of the
+`equeue_dispatch` function.
 
 ``` c
 #include "equeue.h"
@@ -77,15 +73,15 @@ int main() {
 }
 ```
 
-In addition to simple events, an event can be manually allocated with
+In addition to simple callbacks, an event can be manually allocated with
 `equeue_alloc` and posted with `equeue_post` to allow passing an arbitrary
-amount of data to the execution of the event. This memory is allocated out
+amount of context to the execution of the event. This memory is allocated out
 of the equeue's buffer, and dynamic memory can be completely avoided.
 
 The equeue allocator is designed to minimize jitter in interrupt contexts as
 well as avoid memory fragmentation on small devices. The allocator achieves
 both constant-runtime and zero-fragmentation for fixed-size events, however
-grows linearly as the quantity of different sized allocations increases.
+grows linearly as the quantity of differently-sized allocations increases.
 
 ``` c
 #include "equeue.h"
@@ -93,14 +89,14 @@ grows linearly as the quantity of different sized allocations increases.
 equeue_t queue;
 
 // arbitrary data can be moved to a different context
-int enet_callback(void *buffer, int size) {
+int enet_consume(void *buffer, int size) {
     if (size > 512) {
         size = 512;
     }
 
-    void *event = equeue_alloc(&queue, 512);
-    memcpy(event, buffer, size);
-    equeue_post(&queue, event);
+    void *data = equeue_alloc(&queue, 512);
+    memcpy(data, buffer, size);
+    equeue_post(&queue, handle_data_elsewhere, data);
 
     return size;
 }
@@ -133,12 +129,11 @@ void sonar_read(void) {
 
 From an architectural standpoint, event queues easily align with module
 boundaries, where internal state can be implicitly synchronized through
-event registration. Multiple modules can easily use event queues running
-in separate threads.
+event dispatch.
 
-Alternatively, multiple event queues can be easily composed through the
-`equeue_chain` function, which allows multiple event queues to share the
-context of a single `equeue_dispatch` call.
+On platforms where multiple threads are unavailable, multiple modules
+can use independent event queues and still be composed through the
+`equeue_chain` function.
 
 ``` c
 #include "equeue.h"
@@ -166,8 +161,7 @@ void sonar_create(struct sonar *s, equeue_t *target) {
     equeue_call_in(&s->queue, 5, sonar_update, s);
 }
 
-// although the above is perfectly synchronized, we can run these
-// modules on a single event queue
+// all of the above queues can be combined into a single thread of execution
 int main() {
     equeue_t queue;
     equeue_create(&queue, 1024);
@@ -180,7 +174,7 @@ int main() {
     struct slam slam;
     slam_create(&slam, &queue);
 
-    // dispatches events for all of the modules
+    // dispatches events from all of the modules
     equeue_dispatch(&queue, -1);
 }
 ```

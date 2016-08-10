@@ -21,7 +21,7 @@ extern "C" {
 
 
 // The minimum size of an event
-// This size is garunteed to fit events created by event_call
+// This size is guaranteed to fit events created by event_call
 #define EQUEUE_EVENT_SIZE (sizeof(struct equeue_event) + 2*sizeof(void*))
 
 // Internal event structure
@@ -89,9 +89,9 @@ void equeue_destroy(equeue_t *queue);
 // negative, equeue_dispatch will dispatch events indefinitely or until
 // equeue_break is called on this queue.
 //
-// When called with a finite timeout, the equeue_dispatch function is garunteed
-// to terminate. When called with a timeout of 0, the equeue_dispatch does not
-// wait and is irq safe.
+// When called with a finite timeout, the equeue_dispatch function is
+// guaranteed to terminate. When called with a timeout of 0, the
+// equeue_dispatch does not wait and is irq safe.
 void equeue_dispatch(equeue_t *queue, int ms);
 
 // Break out of a running event loop
@@ -171,7 +171,7 @@ int equeue_post(equeue_t *queue, void (*cb)(void *), void *event);
 // The equeue_cancel function is irq safe.
 //
 // If called while the event queue's dispatch loop is active, equeue_cancel
-// does not garuntee that the event will not not execute after it returns as
+// does not guarantee that the event will not not execute after it returns as
 // the event may have already begun executing.
 void equeue_cancel(equeue_t *queue, int id);
 
@@ -198,7 +198,7 @@ void equeue_background(equeue_t *queue,
 // Passing a null queue as the target will unchain the existing queue.
 //
 // The equeue_chain function allows multiple equeues to be composed, sharing
-// the context of a dispatch loop while still being managed independtly.
+// the context of a dispatch loop while still being managed independently.
 void equeue_chain(equeue_t *queue, equeue_t *target);
 
 
