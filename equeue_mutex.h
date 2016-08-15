@@ -22,6 +22,9 @@ extern "C" {
 #if defined(__unix__)
 #include <pthread.h>
 typedef pthread_mutex_t equeue_mutex_t;
+#elif defined(_WIN32)
+#include <windows.h>
+typedef CRITICAL_SECTION equeue_mutex_t;
 #elif defined(__MBED__)
 typedef unsigned equeue_mutex_t;
 #endif

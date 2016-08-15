@@ -10,6 +10,7 @@
 #include <setjmp.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <pthread.h>
 
 
 // Testing setup

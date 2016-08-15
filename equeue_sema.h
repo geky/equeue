@@ -32,6 +32,9 @@ typedef struct equeue_sema {
     pthread_cond_t cond;
     bool signal;
 } equeue_sema_t;
+#elif defined(_WIN32)
+#include <windows.h>
+typedef HANDLE equeue_sema_t;
 #elif defined(__MBED__) && defined(MBED_CONF_RTOS_PRESENT)
 typedef unsigned equeue_sema_t[8];
 #elif defined(__MBED__)
