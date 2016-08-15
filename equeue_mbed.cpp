@@ -16,38 +16,37 @@
 
 
 // Ticker operations
-class EqueueTicker {
-public:
-    EqueueTicker() {
-        _tick = 0;
-        _timer.start();
-        _ticker.attach_us(this, &EqueueTicker::update, (1 << 16) * 1000);
-    };
+static bool equeue_tick_inited = false;
+static unsigned equeue_timer[(sizeof(Timer)+1) / sizeof(unsigned)];
+static unsigned equeue_ticker[(sizeof(Ticker)+1) / sizeof(unsigned)];
+static unsigned equeue_minutes = 0;
 
-    void update() {
-        _timer.reset();
-        _tick += 1 << 16;
-    }
+static void equeue_tick_update() {
+    reinterpret_cast<Timer*>(equeue_timer)->reset();
+    equeue_minutes += 1;
+}
 
-    unsigned tick() {
-        return _tick + (unsigned)_timer.read_ms();
-    }
+static void equeue_tick_init() {
+    MBED_ASSERT(sizeof(equeue_timer) >= sizeof(Timer));
+    MBED_ASSERT(sizeof(equeue_ticker) >= sizeof(Ticker));
+    new (equeue_timer) Timer;
+    new (equeue_ticker) Ticker;
 
-private:
-    unsigned _tick;
-#ifdef DEVICE_LOWPOWERTIMER
-    LowPowerTimer _timer;
-    LowPowerTicker _ticker;
-#else
-    Timer _timer;
-    Ticker _ticker;
-#endif
-};
+    equeue_minutes = 0;
+    reinterpret_cast<Timer*>(equeue_timer)->start();
+    reinterpret_cast<Ticker*>(equeue_ticker)
+            ->attach_us(equeue_tick_update, (1 << 16)*1000);
 
-static EqueueTicker equeue_ticker;
+    equeue_tick_inited = true;
+}
 
 unsigned equeue_tick() {
-    return equeue_ticker.tick();
+    if (!equeue_tick_inited) {
+        equeue_tick_init();
+    }
+
+    unsigned equeue_ms = reinterpret_cast<Timer*>(equeue_timer)->read_ms();
+    return (equeue_minutes << 16) + equeue_ms;
 }
 
 
