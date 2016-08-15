@@ -4,11 +4,11 @@
  * Copyright (c) 2016 Christopher Haster
  * Distributed under the MIT license
  */
-#if defined(__unix__)
-
 #include "equeue_tick.h"
 #include "equeue_sema.h"
 #include "equeue_mutex.h"
+
+#if defined(__unix__)
 
 #include <time.h>
 #include <sys/time.h>

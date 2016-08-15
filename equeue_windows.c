@@ -4,11 +4,11 @@
  * Copyright (c) 2016 Christopher Haster
  * Distributed under the MIT license
  */
-#if defined(_WIN32)
-
 #include "equeue_tick.h"
 #include "equeue_sema.h"
 #include "equeue_mutex.h"
+
+#if defined(_WIN32)
 
 #include <windows.h>
 
