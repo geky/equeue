@@ -100,23 +100,30 @@ void equeue_sema_destroy(equeue_sema_t *s) {
 }
 
 void equeue_sema_signal(equeue_sema_t *s) {
-    *s = true;
+    *s = 1;
+}
+
+static void equeue_sema_timeout(equeue_sema_t *s) {
+    *s = -1;
 }
 
 bool equeue_sema_wait(equeue_sema_t *s, int ms) {
+    int signal = 0;
     Timeout timeout;
-    timeout.attach_us(s, equeue_sema_signal, ms*1000);
+    timeout.attach_us(s, equeue_sema_timeout, ms*1000);
 
     core_util_critical_section_enter();
-    while (!*(volatile equeue_sema_t *)s) {
+    while (!*s) {
         __WFI();
         core_util_critical_section_exit();
         core_util_critical_section_enter();
     }
+
+    signal = *s;
     *s = false;
     core_util_critical_section_exit();
 
-    return true;
+    return (signal > 0);
 }
 
 #endif

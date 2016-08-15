@@ -28,12 +28,10 @@ extern "C" {
 #if defined(__unix__)
 #include <semaphore.h>
 typedef sem_t equeue_sema_t;
-#elif defined(__MBED__)
-#ifdef MBED_CONF_RTOS_PRESENT
+#elif defined(__MBED__) && defined(MBED_CONF_RTOS_PRESENT)
 typedef unsigned equeue_sema_t[8];
-#else
-typedef bool equeue_sema_t;
-#endif
+#elif defined(__MBED__)
+typedef volatile int equeue_sema_t;
 #endif
 
 
