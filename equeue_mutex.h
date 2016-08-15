@@ -27,6 +27,9 @@ typedef pthread_mutex_t equeue_mutex_t;
 typedef CRITICAL_SECTION equeue_mutex_t;
 #elif defined(__MBED__)
 typedef unsigned equeue_mutex_t;
+#elif defined(EQUEUE_PLATFORM_FREERTOS)
+#include "FreeRTOS.h"
+typedef UBaseType_t equeue_mutex_t;
 #endif
 
 

@@ -39,6 +39,13 @@ typedef HANDLE equeue_sema_t;
 typedef unsigned equeue_sema_t[8];
 #elif defined(__MBED__)
 typedef volatile int equeue_sema_t;
+#elif defined(EQUEUE_PLATFORM_FREERTOS)
+#include "FreeRTOS.h"
+#include "semphr.h"
+typedef struct equeue_sema {
+    SemaphoreHandle_t handle;
+    StaticSemaphore_t buffer;
+} equeue_sema_t;
 #endif
 
 
