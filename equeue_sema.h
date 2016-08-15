@@ -26,8 +26,12 @@ extern "C" {
 // dispatch loop to run unnecessarily. For that matter, equeue_signal_wait
 // may even be implemented as a single return statement.
 #if defined(__unix__)
-#include <semaphore.h>
-typedef sem_t equeue_sema_t;
+#include <pthread.h>
+typedef struct equeue_sema {
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+    bool signal;
+} equeue_sema_t;
 #elif defined(__MBED__) && defined(MBED_CONF_RTOS_PRESENT)
 typedef unsigned equeue_sema_t[8];
 #elif defined(__MBED__)

@@ -43,31 +43,55 @@ void equeue_mutex_unlock(equeue_mutex_t *m) {
 
 // Semaphore operations
 int equeue_sema_create(equeue_sema_t *s) {
-    return sem_init(s, 0, 0);
+    int err = pthread_mutex_init(&s->mutex, 0);
+    if (err) {
+        return err;
+    }
+
+    err = pthread_cond_init(&s->cond, 0);
+    if (err) {
+        return err;
+    }
+
+    s->signal = false;
+    return 0;
 }
 
 void equeue_sema_destroy(equeue_sema_t *s) {
-    sem_destroy(s);
+    pthread_cond_destroy(&s->cond);
+    pthread_mutex_destroy(&s->mutex);
 }
 
 void equeue_sema_signal(equeue_sema_t *s) {
-    sem_post(s);
+    pthread_mutex_lock(&s->mutex);
+    s->signal = true;
+    pthread_cond_signal(&s->cond);
+    pthread_mutex_unlock(&s->mutex);
 }
 
 bool equeue_sema_wait(equeue_sema_t *s, int ms) {
-    if (ms < 0) {
-        return !sem_wait(s);
-    } else {
-        struct timeval tv;
-        gettimeofday(&tv, 0);
+    pthread_mutex_lock(&s->mutex);
+    if (!s->signal) {
+        if (ms < 0) {
+            pthread_cond_wait(&s->cond, &s->mutex);
+        } else {
+            struct timeval tv;
+            gettimeofday(&tv, 0);
 
-        struct timespec ts = {
-            .tv_sec = ms/1000 + tv.tv_sec,
-            .tv_nsec = ms*1000000 + tv.tv_usec*1000,
-        };
+            struct timespec ts = {
+                .tv_sec = ms/1000 + tv.tv_sec,
+                .tv_nsec = ms*1000000 + tv.tv_usec*1000,
+            };
 
-        return !sem_timedwait(s, &ts);
+            pthread_cond_timedwait(&s->cond, &s->mutex, &ts);
+        }
     }
+
+    bool signal = s->signal;
+    s->signal = false;
+    pthread_mutex_unlock(&s->mutex);
+
+    return signal;
 }
 
 #endif
