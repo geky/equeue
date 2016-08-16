@@ -5,11 +5,9 @@
  * Copyright (c) 2016 Christopher Haster
  * Distributed under the MIT license
  */
-#include "equeue_tick.h"
-#include "equeue_sema.h"
-#include "equeue_mutex.h"
+#include "equeue_platform.h"
 
-#if defined(__MBED__)
+#if defined(EQUEUE_PLATFORM_MBED)
 
 #include <stdbool.h>
 #include "mbed.h"

@@ -183,12 +183,7 @@ int main() {
 
 The equeue library has a minimal porting layer that is flexible depending
 on the requirements of the underlying platform. Platform specific declarations
-and more information can be found in the following files:
-
-- [equeue_tick](equeue_tick.h)   - millisecond counter
-- [equeue_mutex](equeue_mutex.h) - non-recursive mutex
-- [equeue_sema](equeue_sema.h)   - binary semaphore
-
+and more information can be found in [equeue_platform.h](equeue_platform.h).
 
 ## Tests ##
 

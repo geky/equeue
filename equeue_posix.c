@@ -4,11 +4,9 @@
  * Copyright (c) 2016 Christopher Haster
  * Distributed under the MIT license
  */
-#include "equeue_tick.h"
-#include "equeue_sema.h"
-#include "equeue_mutex.h"
+#include "equeue_platform.h"
 
-#if defined(__unix__)
+#if defined(EQUEUE_PLATFORM_POSIX)
 
 #include <time.h>
 #include <sys/time.h>

@@ -12,9 +12,7 @@ extern "C" {
 #endif
 
 // Platform specific files
-#include "equeue_tick.h"
-#include "equeue_mutex.h"
-#include "equeue_sema.h"
+#include "equeue_platform.h"
 
 #include <stddef.h>
 #include <stdint.h>
