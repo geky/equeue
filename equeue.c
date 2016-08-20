@@ -197,10 +197,10 @@ void equeue_dealloc(equeue_t *q, void *p) {
 
 
 // equeue scheduling functions
-static int equeue_enqueue(equeue_t *q, struct equeue_event *e, unsigned ms) {
+static int equeue_enqueue(equeue_t *q, struct equeue_event *e, unsigned tick) {
     // setup event and hash local id with buffer offset for unique id
     int id = (e->id << q->npw2) | ((unsigned char *)e - q->buffer);
-    e->target = equeue_tick() + ms;
+    e->target = tick + equeue_clampdiff(e->target, tick);
     e->generation = q->generation;
 
     equeue_mutex_lock(&q->queuelock);
@@ -235,7 +235,8 @@ static int equeue_enqueue(equeue_t *q, struct equeue_event *e, unsigned ms) {
     // notify background timer
     if ((q->background.update && q->background.active) &&
         (q->queue == e && !e->sibling)) {
-        q->background.update(q->background.timer, ms);
+        q->background.update(q->background.timer,
+                equeue_clampdiff(e->target, tick));
     }
 
     equeue_mutex_unlock(&q->queuelock);
@@ -332,10 +333,11 @@ static struct equeue_event *equeue_dequeue(equeue_t *q, unsigned target) {
 
 int equeue_post(equeue_t *q, void (*cb)(void*), void *p) {
     struct equeue_event *e = (struct equeue_event*)p - 1;
+    unsigned tick = equeue_tick();
     e->cb = cb;
-    e->target = equeue_clampdiff(e->target, 0);
+    e->target = tick + e->target;
 
-    int id = equeue_enqueue(q, e, e->target);
+    int id = equeue_enqueue(q, e, tick);
     equeue_sema_signal(&q->eventsema);
     return id;
 }
@@ -380,7 +382,8 @@ void equeue_dispatch(equeue_t *q, int ms) {
 
             // reenqueue periodic events or deallocate
             if (e->period >= 0) {
-                equeue_enqueue(q, e, e->period);
+                e->target += e->period;
+                equeue_enqueue(q, e, equeue_tick());
             } else {
                 equeue_incid(q, e);
                 equeue_dealloc(q, e+1);
