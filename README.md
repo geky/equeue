@@ -1,7 +1,8 @@
 ## The equeue library ##
 
-The equeue library is designed as a simple but powerful library for scheduling
-events on composable queues.
+A "Swiss Army knife" for scheduling on embedded systems, the equeue library
+is a simple but powerful libarary for scheduling events on composable
+event queues.
 
 ``` c
 #include "equeue.h"
@@ -178,6 +179,12 @@ int main() {
     equeue_dispatch(&queue, -1);
 }
 ```
+
+## Design ##
+
+See [DESIGN.md](DESIGN.md) for more information on the underlying design
+of the event queue and the tradeoffs related to trying to provide a
+simple and robust scheduler.
 
 ## Platform ##
 
