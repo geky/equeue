@@ -46,6 +46,9 @@ extern "C" {
 #elif defined(EQUEUE_PLATFORM_FREERTOS)
 #include "FreeRTOS.h"
 #include "semphr.h"
+#elif defined(EQUEUE_PLATFORM_MBED)
+#include "cmsis_os2.h"
+#include "rtx_lib.h"
 #endif
 
 
@@ -111,7 +114,10 @@ typedef struct equeue_sema {
 #elif defined(EQUEUE_PLATFORM_WINDOWS)
 typedef HANDLE equeue_sema_t;
 #elif defined(EQUEUE_PLATFORM_MBED) && defined(MBED_CONF_RTOS_PRESENT)
-typedef unsigned equeue_sema_t[9];
+typedef struct equeue_sema {
+    osEventFlagsId_t id;
+    os_event_flags_t mem;
+} equeue_sema_t;
 #elif defined(EQUEUE_PLATFORM_MBED)
 typedef volatile int equeue_sema_t;
 #elif defined(EQUEUE_PLATFORM_FREERTOS)
