@@ -77,8 +77,8 @@ bool equeue_sema_wait(equeue_sema_t *s, int ms) {
             gettimeofday(&tv, 0);
 
             struct timespec ts = {
-                .tv_sec = ms/1000 + tv.tv_sec,
-                .tv_nsec = ms*1000000 + tv.tv_usec*1000,
+                .tv_sec = tv.tv_sec + ms/1000,
+                .tv_nsec = 1000UL*tv.tv_usec + 1000UL*1000UL*(ms % 1000),
             };
 
             pthread_cond_timedwait(&s->cond, &s->mutex, &ts);
