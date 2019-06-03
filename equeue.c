@@ -348,14 +348,17 @@ int equeue_post(equeue_t *q, void (*cb)(void*), void *p) {
     return id;
 }
 
-void equeue_cancel(equeue_t *q, int id) {
+bool equeue_cancel(equeue_t *q, int id) {
     if (!id) {
-        return;
+        return false;
     }
 
     struct equeue_event *e = equeue_unqueue(q, id);
     if (e) {
         equeue_dealloc(q, e + 1);
+        return true;
+    } else {
+        return false;
     }
 }
 
