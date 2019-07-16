@@ -14,6 +14,9 @@
 
 
 // Tick operations
+void equeue_tick_init(void) {
+}
+
 unsigned equeue_tick(void) {
     struct timeval tv;
     gettimeofday(&tv, 0);
