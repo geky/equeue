@@ -27,13 +27,21 @@ using namespace mbed;
 #include "rtos/Kernel.h"
 #include "platform/mbed_os_timer.h"
 
-void equeue_tick_init() {
+static bool equeue_tick_inited = false;
+
+static void equeue_tick_init() {
 #if defined MBED_TICKLESS || !MBED_CONF_RTOS_PRESENT
     mbed::internal::init_os_timer();
 #endif
+
+    equeue_tick_inited = true;
 }
 
 unsigned equeue_tick() {
+    if (!equeue_tick_inited) {
+        equeue_tick_init();
+    }
+
 #if defined MBED_TICKLESS || !MBED_CONF_RTOS_PRESENT
     // It is not safe to call get_ms_count from ISRs, both
     // because documentation says so, and because it will give
@@ -72,6 +80,7 @@ unsigned equeue_tick() {
 #define ALIAS_TIMEOUT    Timeout
 #endif
 
+static bool equeue_tick_inited = false;
 static volatile unsigned equeue_minutes = 0;
 static unsigned equeue_timer[
         (sizeof(ALIAS_TIMER)+sizeof(unsigned)-1)/sizeof(unsigned)];
@@ -83,7 +92,7 @@ static void equeue_tick_update() {
     reinterpret_cast<ALIAS_TIMER*>(equeue_timer)->reset();
 }
 
-void equeue_tick_init() {
+static void equeue_tick_init() {
     MBED_STATIC_ASSERT(sizeof(equeue_timer) >= sizeof(ALIAS_TIMER),
             "The equeue_timer buffer must fit the class Timer");
     MBED_STATIC_ASSERT(sizeof(equeue_ticker) >= sizeof(ALIAS_TICKER),
@@ -94,9 +103,15 @@ void equeue_tick_init() {
     equeue_minutes = 0;
     timer->start();
     ticker->attach_us(equeue_tick_update, 1000 << 16);
+
+    equeue_tick_inited = true;
 }
 
 unsigned equeue_tick() {
+    if (!equeue_tick_inited) {
+        equeue_tick_init();
+    }
+
     unsigned minutes;
     unsigned ms;
 
