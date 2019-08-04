@@ -18,6 +18,14 @@ extern "C" {
 #include <stdint.h>
 
 
+// Version info
+// Major (top-nibble), incremented on backwards incompatible changes
+// Minor (bottom-nibble), incremented on feature additions
+#define EQUEUE_VERSION 0x00010001
+#define EQUEUE_VERSION_MAJOR (0xffff & (EQUEUE_VERSION >> 16))
+#define EQUEUE_VERSION_MINOR (0xffff & (EQUEUE_VERSION >>  0))
+
+
 // The minimum size of an event
 // This size is guaranteed to fit events created by event_call
 #define EQUEUE_EVENT_SIZE (sizeof(struct equeue_event) + 2*sizeof(void*))

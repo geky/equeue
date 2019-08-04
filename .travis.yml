@@ -71,6 +71,67 @@ jobs:
             fi
           fi
 
+    # Deploy stage for updating versions and tags
+    - stage: deploy
+      env:
+        - STAGE=deploy
+        - NAME=deploy
+      script:
+        - |
+          bash << 'SCRIPT'
+          set -ev
+          # Find version defined in equeue.h
+          EQUEUE_VERSION=$(grep -ox '#define EQUEUE_VERSION .*' equeue.h \
+              | cut -d ' ' -f3)
+          EQUEUE_VERSION_MAJOR=$((0xffff & ($EQUEUE_VERSION >> 16)))
+          EQUEUE_VERSION_MINOR=$((0xffff & ($EQUEUE_VERSION >>  0)))
+          # Grab latest patch from repo tags, default to 0, needs finagling
+          # to get past GitHub's pagination API
+          PREV_URL=https://api.github.com/repos/$TRAVIS_REPO_SLUG/git/refs/tags/v$EQUEUE_VERSION_MAJOR.$EQUEUE_VERSION_MINOR.
+          PREV_URL=$(curl -u "$GEKY_BOT_RELEASES" "$PREV_URL" -I \
+              | sed -n '/^Link/{s/.*<\(.*\)>; rel="last"/\1/;p;q0};$q1' \
+              || echo $PREV_URL)
+          EQUEUE_VERSION_PATCH=$(curl -u "$GEKY_BOT_RELEASES" "$PREV_URL" \
+              | jq 'map(.ref | match("\\bv.*\\..*\\.(.*)$";"g")
+                  .captures[].string | tonumber) | max + 1' \
+              || echo 0)
+          # We have our new version
+          EQUEUE_VERSION="v$EQUEUE_VERSION_MAJOR.$EQUEUE_VERSION_MINOR.$EQUEUE_VERSION_PATCH"
+          echo "VERSION $EQUEUE_VERSION"
+          # Check that we're the most recent commit
+          CURRENT_COMMIT=$(curl -f -u "$GEKY_BOT_RELEASES" \
+              https://api.github.com/repos/$TRAVIS_REPO_SLUG/commits/master \
+              | jq -re '.sha')
+          [ "$TRAVIS_COMMIT" == "$CURRENT_COMMIT" ] || exit 0
+          # Create major branch (vN)
+          git branch v$EQUEUE_VERSION_MAJOR HEAD
+          git push https://$GEKY_BOT_RELEASES@github.com/$TRAVIS_REPO_SLUG.git \
+              v$EQUEUE_VERSION_MAJOR
+          # Create patch version tag (vN.N.N)
+          curl -f -u "$GEKY_BOT_RELEASES" -X POST \
+              https://api.github.com/repos/$TRAVIS_REPO_SLUG/git/refs \
+              -d "{
+                  \"ref\": \"refs/tags/$EQUEUE_VERSION\",
+                  \"sha\": \"$TRAVIS_COMMIT\"
+              }"
+          # Build release notes
+          PREV=$(git tag --sort=-v:refname -l "v*" | head -1)
+          if [ ! -z "$PREV" ]
+          then
+              echo "PREV $PREV"
+              CHANGES=$(git log --oneline $PREV.. --grep='^Merge' --invert-grep)
+              printf "CHANGES\n%s\n\n" "$CHANGES"
+          fi
+          # Create the release
+          curl -f -u "$GEKY_BOT_RELEASES" -X POST \
+              https://api.github.com/repos/$TRAVIS_REPO_SLUG/releases \
+              -d "{
+                  \"tag_name\": \"$EQUEUE_VERSION\",
+                  \"name\": \"${EQUEUE_VERSION%.0}\",
+                  \"draft\": $(jq -R 'endswith(".0")' <<< "$EQUEUE_VERSION"),
+                  \"body\": $(jq -sR '.' <<< "$CHANGES")
+              }" #"
+          SCRIPT
 
 # Manage statuses
 before_install:
@@ -109,3 +170,5 @@ after_success:
 # Job control
 stages:
   - name: test
+  - name: deploy
+    if: branch = master AND type = push
