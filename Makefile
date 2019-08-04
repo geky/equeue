@@ -1,8 +1,8 @@
 TARGET = libequeue.a
 
-CC = gcc
-AR = ar
-SIZE = size
+CC ?= gcc
+AR ?= ar
+SIZE ?= size
 
 SRC += $(wildcard *.c)
 OBJ := $(SRC:.c=.o)
@@ -10,19 +10,19 @@ DEP := $(SRC:.c=.d)
 ASM := $(SRC:.c=.s)
 
 ifdef DEBUG
-CFLAGS += -O0 -g3
+override CFLAGS += -O0 -g3
 else
-CFLAGS += -O2
+override CFLAGS += -Os
 endif
 ifdef WORD
-CFLAGS += -m$(WORD)
+override CFLAGS += -m$(WORD)
 endif
-CFLAGS += -I.
-CFLAGS += -std=c99
-CFLAGS += -Wall
-CFLAGS += -D_XOPEN_SOURCE=600
+override CFLAGS += -I.
+override CFLAGS += -std=c99
+override CFLAGS += -Wall
+override CFLAGS += -D_XOPEN_SOURCE=600
 
-LFLAGS += -pthread
+override LFLAGS += -pthread
 
 
 all: $(TARGET)
