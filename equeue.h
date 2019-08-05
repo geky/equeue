@@ -1,4 +1,4 @@
-/* 
+/*
  * Flexible event queue for dispatching events
  *
  * Copyright (c) 2016 Christopher Haster
@@ -23,22 +23,38 @@ extern "C" {
 #define EQUEUE_VERSION_MINOR (0xffff & (EQUEUE_VERSION >>  0))
 
 
-// The minimum size of an event
-// This size is guaranteed to fit events created by event_call
-#define EQUEUE_EVENT_SIZE (sizeof(struct equeue_event) + 2*sizeof(void*))
-
 // Type of event ids, used to represent queued events
 typedef int32_t equeue_id_t;
 
-// Internal event structure
-struct equeue_event {
+// Event header structure
+//
+// Note that it is possible to create your own static events with
+// this structure by prefixing a structure you wish to queue with this
+// header.
+//
+// However, there is a quirk in that equeue event operations expect a pointer
+// to the data after the header, not the header itself. You will need to offset
+// references to the header when calling equeue_event_* functions
+//
+//     struct myevent {
+//         equeue_event_header_t header;
+//         uint32_t data;
+//     };
+//
+//     struct myevent e;
+//     equeue_post(&q, &e + 1);
+//
+// Because the internals of equeue_event_header_t are susceptible to change,
+// modifications to the event should always be done through the equeue_event_*
+// functions.
+typedef struct equeue_event_header {
     size_t size;
     uint8_t id;
     uint8_t generation;
 
-    struct equeue_event *next;
-    struct equeue_event *sibling;
-    struct equeue_event **ref;
+    struct equeue_event_header *next;
+    struct equeue_event_header *sibling;
+    struct equeue_event_header **ref;
 
     equeue_tick_t target;
     equeue_stick_t period;
@@ -46,11 +62,11 @@ struct equeue_event {
 
     void (*cb)(void *);
     // data follows
-};
+} equeue_event_header_t;
 
 // Event queue structure
 typedef struct equeue {
-    struct equeue_event *queue;
+    equeue_event_header_t *queue;
     equeue_tick_t tick;
     bool break_requested;
     uint8_t generation;
@@ -59,7 +75,7 @@ typedef struct equeue {
     uint8_t npw2;
     void *allocated;
 
-    struct equeue_event *chunks;
+    equeue_event_header_t *chunks;
     struct equeue_slab {
         size_t size;
         uint8_t *data;
@@ -172,7 +188,9 @@ void equeue_event_dtor(void *event, void (*dtor)(void *));
 // moving events out of irq contexts.
 //
 // The return value is a unique id that represents the posted event and can
-// be passed to equeue_cancel.
+// be passed to equeue_cancel, unless the event is statically allocated, in
+// which case the id will be 0 and functions such as equeue_event_cancel must
+// be used directly.
 equeue_id_t equeue_post(equeue_t *queue, void (*cb)(void *), void *event);
 
 // Cancel an in-flight event
@@ -202,6 +220,27 @@ int equeue_cancel(equeue_t *queue, equeue_id_t id);
 //
 // If the event is not in the queue, LFS_ERR_NOENT is returned.
 equeue_stick_t equeue_timeleft(equeue_t *q, equeue_id_t id);
+
+// Create a statically allocated event given a buffer prefixed by
+// equeue_event_header_t.
+//
+// equeue_event_destroy cleans up any resources used by the event, however
+// because the event is statically allocated, this is equivalent to
+// equeue_event_cancel. TODO dtors?
+int equeue_event_create(void *event);
+void equeue_event_destroy(void *event);
+
+// Cancels an in-flight, statically allocated event
+//
+// This is the same as equeue_cancel, but can be used on a static event when
+// an id is not available.
+int equeue_event_cancel(void *event);
+
+// Query how much time is left for a delayed, statically-allocated event
+//
+// This is the same as equeue_timeleft, but can be used on a static event when
+// an id is not available.
+equeue_stick_t equeue_event_timeleft(void *event);
 
 // Background an event queue onto a single-shot timer
 //

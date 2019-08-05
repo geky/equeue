@@ -26,7 +26,7 @@ static inline equeue_stick_t equeue_clampdiff(
 }
 
 // Increment the unique id in an event, hiding the event from cancel
-static inline void equeue_incid(equeue_t *q, struct equeue_event *e) {
+static inline void equeue_incid(equeue_t *q, equeue_event_header_t *e) {
     e->id += 1;
     if (((equeue_id_t)e->id << q->npw2) <= 0) {
         e->id = 1;
@@ -95,8 +95,8 @@ int equeue_create_inplace(equeue_t *q, size_t size, void *buffer) {
 
 void equeue_destroy(equeue_t *q) {
     // call destructors on pending events
-    for (struct equeue_event *es = q->queue; es; es = es->next) {
-        for (struct equeue_event *e = es->sibling; e; e = e->sibling) {
+    for (equeue_event_header_t *es = q->queue; es; es = es->next) {
+        for (equeue_event_header_t *e = es->sibling; e; e = e->sibling) {
             if (e->dtor) {
                 e->dtor(e + 1);
             }
@@ -119,17 +119,17 @@ void equeue_destroy(equeue_t *q) {
 
 
 // equeue chunk allocation functions
-static struct equeue_event *equeue_mem_alloc(equeue_t *q, size_t size) {
+static equeue_event_header_t *equeue_mem_alloc(equeue_t *q, size_t size) {
     // add event overhead
-    size += sizeof(struct equeue_event);
+    size += sizeof(equeue_event_header_t);
     size = (size + sizeof(void*)-1) & ~(sizeof(void*)-1);
 
     equeue_mutex_lock(&q->memlock);
 
     // check if a good chunk is available
-    for (struct equeue_event **p = &q->chunks; *p; p = &(*p)->next) {
+    for (equeue_event_header_t **p = &q->chunks; *p; p = &(*p)->next) {
         if ((*p)->size >= size) {
-            struct equeue_event *e = *p;
+            equeue_event_header_t *e = *p;
             if (e->sibling) {
                 *p = e->sibling;
                 (*p)->next = e->next;
@@ -144,7 +144,7 @@ static struct equeue_event *equeue_mem_alloc(equeue_t *q, size_t size) {
 
     // otherwise allocate a new chunk out of the slab
     if (q->slab.size >= size) {
-        struct equeue_event *e = (struct equeue_event *)q->slab.data;
+        equeue_event_header_t *e = (equeue_event_header_t *)q->slab.data;
         q->slab.data += size;
         q->slab.size -= size;
         e->size = size;
@@ -158,11 +158,11 @@ static struct equeue_event *equeue_mem_alloc(equeue_t *q, size_t size) {
     return NULL;
 }
 
-static void equeue_mem_dealloc(equeue_t *q, struct equeue_event *e) {
+static void equeue_mem_dealloc(equeue_t *q, equeue_event_header_t *e) {
     equeue_mutex_lock(&q->memlock);
 
     // stick chunk into list of chunks
-    struct equeue_event **p = &q->chunks;
+    equeue_event_header_t **p = &q->chunks;
     while (*p && (*p)->size < e->size) {
         p = &(*p)->next;
     }
@@ -180,7 +180,7 @@ static void equeue_mem_dealloc(equeue_t *q, struct equeue_event *e) {
 }
 
 void *equeue_alloc(equeue_t *q, size_t size) {
-    struct equeue_event *e = equeue_mem_alloc(q, size);
+    equeue_event_header_t *e = equeue_mem_alloc(q, size);
     if (!e) {
         return NULL;
     }
@@ -193,7 +193,7 @@ void *equeue_alloc(equeue_t *q, size_t size) {
 }
 
 void equeue_dealloc(equeue_t *q, void *p) {
-    struct equeue_event *e = (struct equeue_event*)p - 1;
+    equeue_event_header_t *e = (equeue_event_header_t*)p - 1;
 
     if (e->dtor) {
         e->dtor(e+1);
@@ -205,7 +205,7 @@ void equeue_dealloc(equeue_t *q, void *p) {
 
 // equeue scheduling functions
 static equeue_id_t equeue_enqueue(equeue_t *q,
-        struct equeue_event *e, equeue_tick_t tick) {
+        equeue_event_header_t *e, equeue_tick_t tick) {
     // setup event and hash local id with buffer offset for unique id
     equeue_id_t id = (e->id << q->npw2) | ((unsigned char *)e - q->buffer);
     e->target = tick + equeue_clampdiff(e->target, tick);
@@ -214,7 +214,7 @@ static equeue_id_t equeue_enqueue(equeue_t *q,
     equeue_mutex_lock(&q->queuelock);
 
     // find the event slot
-    struct equeue_event **p = &q->queue;
+    equeue_event_header_t **p = &q->queue;
     while (*p && equeue_tickdiff((*p)->target, e->target) < 0) {
         p = &(*p)->next;
     }
@@ -252,9 +252,9 @@ static equeue_id_t equeue_enqueue(equeue_t *q,
     return id;
 }
 
-static struct equeue_event *equeue_unqueue(equeue_t *q, equeue_id_t id) {
+static equeue_event_header_t *equeue_unqueue(equeue_t *q, equeue_id_t id) {
     // decode event from unique id and check that the local id matches
-    struct equeue_event *e = (struct equeue_event *)
+    equeue_event_header_t *e = (equeue_event_header_t *)
             &q->buffer[id & ((1 << q->npw2)-1)];
 
     equeue_mutex_lock(&q->queuelock);
@@ -295,7 +295,7 @@ static struct equeue_event *equeue_unqueue(equeue_t *q, equeue_id_t id) {
     return e;
 }
 
-static struct equeue_event *equeue_dequeue(equeue_t *q, equeue_tick_t target) {
+static equeue_event_header_t *equeue_dequeue(equeue_t *q, equeue_tick_t target) {
     equeue_mutex_lock(&q->queuelock);
 
     // find all expired events and mark a new generation
@@ -304,8 +304,8 @@ static struct equeue_event *equeue_dequeue(equeue_t *q, equeue_tick_t target) {
         q->tick = target;
     }
 
-    struct equeue_event *head = q->queue;
-    struct equeue_event **p = &head;
+    equeue_event_header_t *head = q->queue;
+    equeue_event_header_t **p = &head;
     while (*p && equeue_tickdiff((*p)->target, target) <= 0) {
         p = &(*p)->next;
     }
@@ -320,14 +320,14 @@ static struct equeue_event *equeue_dequeue(equeue_t *q, equeue_tick_t target) {
     equeue_mutex_unlock(&q->queuelock);
 
     // reverse and flatten each slot to match insertion order
-    struct equeue_event **tail = &head;
-    struct equeue_event *ess = head;
+    equeue_event_header_t **tail = &head;
+    equeue_event_header_t *ess = head;
     while (ess) {
-        struct equeue_event *es = ess;
+        equeue_event_header_t *es = ess;
         ess = es->next;
 
-        struct equeue_event *prev = NULL;
-        for (struct equeue_event *e = es; e; e = e->sibling) {
+        equeue_event_header_t *prev = NULL;
+        for (equeue_event_header_t *e = es; e; e = e->sibling) {
             e->next = prev;
             prev = e;
         }
@@ -340,7 +340,7 @@ static struct equeue_event *equeue_dequeue(equeue_t *q, equeue_tick_t target) {
 }
 
 equeue_id_t equeue_post(equeue_t *q, void (*cb)(void*), void *p) {
-    struct equeue_event *e = (struct equeue_event*)p - 1;
+    equeue_event_header_t *e = (equeue_event_header_t*)p - 1;
     equeue_tick_t tick = equeue_tick();
     e->cb = cb;
     e->target = tick + e->target;
@@ -355,7 +355,7 @@ int equeue_cancel(equeue_t *q, equeue_id_t id) {
         return EQUEUE_ERR_NOENT;
     }
 
-    struct equeue_event *e = equeue_unqueue(q, id);
+    equeue_event_header_t *e = equeue_unqueue(q, id);
     if (e) {
         equeue_dealloc(q, e + 1);
         return 0;
@@ -370,7 +370,7 @@ int equeue_timeleft(equeue_t *q, equeue_id_t id) {
     }
 
     // decode event from unique id and check that the local id matches
-    struct equeue_event *e = (struct equeue_event *)
+    equeue_event_header_t *e = (equeue_event_header_t *)
             &q->buffer[id & ((1 << q->npw2)-1)];
 
     int ret = EQUEUE_ERR_NOENT;
@@ -396,11 +396,11 @@ int equeue_dispatch(equeue_t *q, equeue_stick_t ms) {
 
     while (1) {
         // collect all the available events and next deadline
-        struct equeue_event *es = equeue_dequeue(q, tick);
+        equeue_event_header_t *es = equeue_dequeue(q, tick);
 
         // dispatch events
         while (es) {
-            struct equeue_event *e = es;
+            equeue_event_header_t *e = es;
             es = e->next;
 
             // actually dispatch the callbacks
@@ -473,17 +473,17 @@ int equeue_dispatch(equeue_t *q, equeue_stick_t ms) {
 
 // event functions
 void equeue_event_delay(void *p, equeue_stick_t ms) {
-    struct equeue_event *e = (struct equeue_event*)p - 1;
+    equeue_event_header_t *e = (equeue_event_header_t*)p - 1;
     e->target = ms;
 }
 
 void equeue_event_period(void *p, equeue_stick_t ms) {
-    struct equeue_event *e = (struct equeue_event*)p - 1;
+    equeue_event_header_t *e = (equeue_event_header_t*)p - 1;
     e->period = ms;
 }
 
 void equeue_event_dtor(void *p, void (*dtor)(void *)) {
-    struct equeue_event *e = (struct equeue_event*)p - 1;
+    equeue_event_header_t *e = (equeue_event_header_t*)p - 1;
     e->dtor = dtor;
 }
 

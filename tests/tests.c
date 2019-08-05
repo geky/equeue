@@ -659,16 +659,41 @@ void sibling_test(void) {
     int id1 = equeue_call_in(&q, 1, pass_func, 0);
     int id2 = equeue_call_in(&q, 1, pass_func, 0);
 
-    struct equeue_event *e = q.queue;
+    equeue_event_header_t *e = q.queue;
 
     for (; e; e = e->next) {
-        for (struct equeue_event *s = e->sibling; s; s = s->sibling) {
+        for (equeue_event_header_t *s = e->sibling; s; s = s->sibling) {
             test_assert(!s->next);
         }
     }
     equeue_cancel(&q, id0);
     equeue_cancel(&q, id1);
     equeue_cancel(&q, id2);
+    equeue_destroy(&q);
+}
+
+struct myevent {
+    equeue_event_header_t header;
+    bool touched;
+};
+
+void myfunc(void *p) {
+    struct myevent *me = (struct myevent*)p - 1;
+    me->touched = true;
+}
+
+void static_test(void) {
+    equeue_t q;
+    int err = equeue_create(&q, 2048);
+    test_assert(!err);
+
+    struct myevent me;
+    me.touched = false;
+
+    equeue_post(&q, simple_func, &me.header+1);
+    equeue_dispatch(&q, 0);
+    test_assert(me.touched);
+
     equeue_destroy(&q);
 }
 
@@ -788,6 +813,7 @@ int main() {
     test_run(multithread_test);
     test_run(break_request_cleared_on_timeout);
     test_run(sibling_test);
+    test_run(static_test);
     test_run(simple_barrage_test, 10);
     test_run(fragmenting_barrage_test, 10);
     test_run(multithreaded_barrage_test, 10);
