@@ -7,7 +7,7 @@
  */
 #include "equeue_platform.h"
 
-#if defined(EQUEUE_PLATFORM_MBED)
+#if defined(EQUEUE_PLATFORM_MBED) && !defined(EQUEUE_PLATFORM)
 
 #include <stdbool.h>
 #include <string.h>
@@ -37,7 +37,7 @@ static void equeue_tick_init() {
     equeue_tick_inited = true;
 }
 
-unsigned equeue_tick() {
+equeue_tick_t equeue_tick() {
     if (!equeue_tick_inited) {
         equeue_tick_init();
     }
@@ -81,11 +81,11 @@ unsigned equeue_tick() {
 #endif
 
 static bool equeue_tick_inited = false;
-static volatile unsigned equeue_minutes = 0;
-static unsigned equeue_timer[
-        (sizeof(ALIAS_TIMER)+sizeof(unsigned)-1)/sizeof(unsigned)];
-static unsigned equeue_ticker[
-        (sizeof(ALIAS_TICKER)+sizeof(unsigned)-1)/sizeof(unsigned)];
+static volatile uint32_t equeue_minutes = 0;
+static uint32_t equeue_timer[
+        (sizeof(ALIAS_TIMER)+sizeof(uint32_t)-1)/sizeof(uint32_t)];
+static uint32_t equeue_ticker[
+        (sizeof(ALIAS_TICKER)+sizeof(uint32_t)-1)/sizeof(uint32_t)];
 
 static void equeue_tick_update() {
     equeue_minutes += reinterpret_cast<ALIAS_TIMER*>(equeue_timer)->read_ms();
@@ -107,13 +107,13 @@ static void equeue_tick_init() {
     equeue_tick_inited = true;
 }
 
-unsigned equeue_tick() {
+equeue_tick_t equeue_tick() {
     if (!equeue_tick_inited) {
         equeue_tick_init();
     }
 
-    unsigned minutes;
-    unsigned ms;
+    uint32_t minutes;
+    uint32_t ms;
 
     do {
         minutes = equeue_minutes;
@@ -159,12 +159,13 @@ void equeue_sema_signal(equeue_sema_t *s) {
     osEventFlagsSet(s->id, 1);
 }
 
-bool equeue_sema_wait(equeue_sema_t *s, int ms) {
+int equeue_sema_wait(equeue_sema_t *s, int ms) {
     if (ms < 0) {
         ms = osWaitForever;
     }
 
-    return (osEventFlagsWait(s->id, 1, osFlagsWaitAny, ms) == 1);
+    return (osEventFlagsWait(s->id, 1, osFlagsWaitAny, ms) == 1)
+            ? 0 : EQUEUE_ERR_TIMEDOUT;
 }
 
 #else
@@ -186,7 +187,7 @@ static void equeue_sema_timeout(equeue_sema_t *s) {
     *s = -1;
 }
 
-bool equeue_sema_wait(equeue_sema_t *s, int ms) {
+int equeue_sema_wait(equeue_sema_t *s, int ms) {
     int signal = 0;
     ALIAS_TIMEOUT timeout;
     if (ms == 0) {
@@ -206,7 +207,7 @@ bool equeue_sema_wait(equeue_sema_t *s, int ms) {
     *s = false;
     core_util_critical_section_exit();
 
-    return (signal > 0);
+    return (signal > 0) ? 0 : EQUEUE_ERR_TIMEDOUT;
 }
 
 #endif

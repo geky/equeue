@@ -7,15 +7,12 @@
 #ifndef EQUEUE_H
 #define EQUEUE_H
 
+#include "equeue_util.h"
+#include "equeue_platform.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-// Platform specific files
-#include "equeue_platform.h"
-
-#include <stddef.h>
-#include <stdint.h>
 
 
 // Version info
@@ -30,9 +27,12 @@ extern "C" {
 // This size is guaranteed to fit events created by event_call
 #define EQUEUE_EVENT_SIZE (sizeof(struct equeue_event) + 2*sizeof(void*))
 
+// Type of event ids, used to represent queued events
+typedef int32_t equeue_id_t;
+
 // Internal event structure
 struct equeue_event {
-    unsigned size;
+    size_t size;
     uint8_t id;
     uint8_t generation;
 
@@ -40,8 +40,8 @@ struct equeue_event {
     struct equeue_event *sibling;
     struct equeue_event **ref;
 
-    unsigned target;
-    int period;
+    equeue_tick_t target;
+    equeue_stick_t period;
     void (*dtor)(void *);
 
     void (*cb)(void *);
@@ -51,23 +51,23 @@ struct equeue_event {
 // Event queue structure
 typedef struct equeue {
     struct equeue_event *queue;
-    unsigned tick;
+    equeue_tick_t tick;
     bool break_requested;
     uint8_t generation;
 
-    unsigned char *buffer;
-    unsigned npw2;
+    uint8_t *buffer;
+    uint8_t npw2;
     void *allocated;
 
     struct equeue_event *chunks;
     struct equeue_slab {
         size_t size;
-        unsigned char *data;
+        uint8_t *data;
     } slab;
 
     struct equeue_background {
         bool active;
-        void (*update)(void *timer, int ms);
+        void (*update)(void *timer, equeue_stick_t ms);
         void *timer;
     } background;
 
@@ -81,10 +81,11 @@ typedef struct equeue {
 //
 // Creates and destroys an event queue. The event queue either allocates a
 // buffer of the specified size with malloc or uses a user provided buffer
-// if constructed with equeue_create_inplace.
+// if constructed with equeue_create_inplace. If a buffer is provided, it
+// it must be word aligned.
 //
-// If the event queue creation fails, equeue_create returns a negative,
-// platform-specific error code.
+// If the event queue creation fails, equeue_create returns a negative
+// error code.
 int equeue_create(equeue_t *queue, size_t size);
 int equeue_create_inplace(equeue_t *queue, size_t size, void *buffer);
 void equeue_destroy(equeue_t *queue);
@@ -98,7 +99,10 @@ void equeue_destroy(equeue_t *queue);
 // When called with a finite timeout, the equeue_dispatch function is
 // guaranteed to terminate. When called with a timeout of 0, the
 // equeue_dispatch does not wait and is irq safe.
-void equeue_dispatch(equeue_t *queue, int ms);
+//
+// Returns EQUEUE_ERR_TIMEDOUT if the timeout was reached, or returns
+// EQUEUE_ERR_BREAK if equeue_break was called.
+int equeue_dispatch(equeue_t *queue, equeue_stick_t ms);
 
 // Break out of a running event loop
 //
@@ -120,10 +124,13 @@ void equeue_break(equeue_t *queue);
 //
 // The return value is a unique id that represents the posted event and can
 // be passed to equeue_cancel. If there is not enough memory to allocate the
-// event, equeue_call returns an id of 0.
-int equeue_call(equeue_t *queue, void (*cb)(void *), void *data);
-int equeue_call_in(equeue_t *queue, int ms, void (*cb)(void *), void *data);
-int equeue_call_every(equeue_t *queue, int ms, void (*cb)(void *), void *data);
+// event, equeue_call returns LFS_ERR_NOMEM.
+equeue_id_t equeue_call(equeue_t *queue,
+        void (*cb)(void *), void *data);
+equeue_id_t equeue_call_in(equeue_t *queue, equeue_stick_t ms,
+        void (*cb)(void *), void *data);
+equeue_id_t equeue_call_every(equeue_t *queue, equeue_stick_t ms,
+        void (*cb)(void *), void *data);
 
 // Allocate memory for events
 //
@@ -141,7 +148,7 @@ int equeue_call_every(equeue_t *queue, int ms, void (*cb)(void *), void *data);
 //
 // The equeue_alloc function returns a pointer to the event's allocated memory
 // and acts as a handle to the underlying event. If there is not enough memory
-// to allocate the event, equeue_alloc returns null.
+// to allocate the event, equeue_alloc returns NULL.
 void *equeue_alloc(equeue_t *queue, size_t size);
 void equeue_dealloc(equeue_t *queue, void *event);
 
@@ -150,8 +157,8 @@ void equeue_dealloc(equeue_t *queue, void *event);
 // equeue_event_delay  - Millisecond delay before dispatching an event
 // equeue_event_period - Millisecond period for repeating dispatching an event
 // equeue_event_dtor   - Destructor to run when the event is deallocated
-void equeue_event_delay(void *event, int ms);
-void equeue_event_period(void *event, int ms);
+void equeue_event_delay(void *event, equeue_stick_t ms);
+void equeue_event_period(void *event, equeue_stick_t ms);
 void equeue_event_dtor(void *event, void (*dtor)(void *));
 
 // Post an event onto the event queue
@@ -166,7 +173,7 @@ void equeue_event_dtor(void *event, void (*dtor)(void *));
 //
 // The return value is a unique id that represents the posted event and can
 // be passed to equeue_cancel.
-int equeue_post(equeue_t *queue, void (*cb)(void *), void *event);
+equeue_id_t equeue_post(equeue_t *queue, void (*cb)(void *), void *event);
 
 // Cancel an in-flight event
 //
@@ -177,20 +184,24 @@ int equeue_post(equeue_t *queue, void (*cb)(void *), void *event);
 // The equeue_cancel function is irq safe.
 //
 // If called while the event queue's dispatch loop is active in another thread,
-// equeue_cancel does not guarantee that the event will not execute after it returns as
-// the event may have already begun executing.
-// Returning true guarantees that cancel succeeded and event will not execute.
-// Returning false if invalid id or already started executing.
-bool equeue_cancel(equeue_t *queue, int id);
+// equeue_cancel does not guarantee that the event will not execute after it
+// returns as the event may have already begun executing.
+//
+// equeue_cancel returns 0 if it successfully cancelled an event that was
+// pending exectution, otherwise it returns LFS_ERR_NOENT if the event is
+// not in the queue. Note it is not always necessary to check the return value
+// as the event is guaranteed to not execute after equeue_cancel returns.
+int equeue_cancel(equeue_t *queue, equeue_id_t id);
 
 // Query how much time is left for delayed event
 //
-//  If event is delayed, this function can be used to query how much time
-//  is left until the event is due to be dispatched.
+// If event is delayed, this function can be used to query how much time
+// is left until the event is due to be dispatched.
 //
-//  This function is irq safe.
+// This function is irq safe.
 //
-int equeue_timeleft(equeue_t *q, int id);
+// If the event is not in the queue, LFS_ERR_NOENT is returned.
+equeue_stick_t equeue_timeleft(equeue_t *q, equeue_id_t id);
 
 // Background an event queue onto a single-shot timer
 //
@@ -204,7 +215,7 @@ int equeue_timeleft(equeue_t *q, int id);
 // of hardware timers or even other event loops, allowing an event queue to
 // be effectively backgrounded.
 void equeue_background(equeue_t *queue,
-        void (*update)(void *timer, int ms), void *timer);
+        void (*update)(void *timer, equeue_stick_t ms), void *timer);
 
 // Chain an event queue onto another event queue
 //
@@ -217,8 +228,8 @@ void equeue_background(equeue_t *queue,
 // The equeue_chain function allows multiple equeues to be composed, sharing
 // the context of a dispatch loop while still being managed independently.
 //
-// If the event queue chaining fails, equeue_chain returns a negative,
-// platform-specific error code.
+// If the event queue chaining fails, equeue_chain returns a negative
+// error code.
 int equeue_chain(equeue_t *queue, equeue_t *target);
 
 

@@ -12,21 +12,23 @@
 
 // calculate the relative-difference between absolute times while
 // correctly handling overflow conditions
-static inline int equeue_tickdiff(unsigned a, unsigned b) {
-    return (int)(unsigned)(a - b);
+static inline equeue_stick_t equeue_tickdiff(
+        equeue_tick_t a, equeue_tick_t b) {
+    return equeue_scmp(a, b);
 }
 
 // calculate the relative-difference between absolute times, but
 // also clamp to zero, resulting in only non-zero values.
-static inline int equeue_clampdiff(unsigned a, unsigned b) {
-    int diff = equeue_tickdiff(a, b);
+static inline equeue_stick_t equeue_clampdiff(
+        equeue_tick_t a, equeue_tick_t b) {
+    equeue_stick_t diff = equeue_tickdiff(a, b);
     return ~(diff >> (8*sizeof(int)-1)) & diff;
 }
 
 // Increment the unique id in an event, hiding the event from cancel
 static inline void equeue_incid(equeue_t *q, struct equeue_event *e) {
     e->id += 1;
-    if ((e->id << q->npw2) == 0) {
+    if (((equeue_id_t)e->id << q->npw2) <= 0) {
         e->id = 1;
     }
 }
@@ -35,46 +37,45 @@ static inline void equeue_incid(equeue_t *q, struct equeue_event *e) {
 // equeue lifetime management
 int equeue_create(equeue_t *q, size_t size) {
     // dynamically allocate the specified buffer
-    void *buffer = malloc(size);
+    void *buffer = equeue_malloc(size);
     if (!buffer) {
-        return -1;
+        return EQUEUE_ERR_NOMEM;
     }
 
     int err = equeue_create_inplace(q, size, buffer);
+    if (err) {
+        equeue_free(buffer);
+        return err;
+    }
+
     q->allocated = buffer;
-    return err;
+    return 0;
 }
 
 int equeue_create_inplace(equeue_t *q, size_t size, void *buffer) {
     // setup queue around provided buffer
-    // ensure buffer and size are aligned
-    q->buffer = (void *)(((uintptr_t) buffer + sizeof(void *) -1) & ~(sizeof(void *) -1));
-    size -= (char *) q->buffer - (char *) buffer;
-    size &= ~(sizeof(void *) -1);
+    // check that buffer and size are aligned
+    EQUEUE_ASSERT((uintptr_t)buffer % sizeof(uintptr_t) == 0 &&
+            size % sizeof(uintptr_t) == 0);
+    q->buffer = buffer;
+    q->allocated = NULL;
+    q->npw2 = equeue_npw2(size);
 
-    q->allocated = 0;
-
-    q->npw2 = 0;
-    for (unsigned s = size; s; s >>= 1) {
-        q->npw2++;
-    }
-
-    q->chunks = 0;
+    q->chunks = NULL;
     q->slab.size = size;
     q->slab.data = q->buffer;
 
-    q->queue = 0;
+    q->queue = NULL;
     q->tick = equeue_tick();
     q->generation = 0;
     q->break_requested = false;
 
     q->background.active = false;
-    q->background.update = 0;
-    q->background.timer = 0;
+    q->background.update = NULL;
+    q->background.timer = NULL;
 
     // initialize platform resources
-    int err;
-    err = equeue_sema_create(&q->eventsema);
+    int err = equeue_sema_create(&q->eventsema);
     if (err < 0) {
         return err;
     }
@@ -113,7 +114,7 @@ void equeue_destroy(equeue_t *q) {
     equeue_mutex_destroy(&q->memlock);
     equeue_mutex_destroy(&q->queuelock);
     equeue_sema_destroy(&q->eventsema);
-    free(q->allocated);
+    equeue_free(q->allocated);
 }
 
 
@@ -154,7 +155,7 @@ static struct equeue_event *equeue_mem_alloc(equeue_t *q, size_t size) {
     }
 
     equeue_mutex_unlock(&q->memlock);
-    return 0;
+    return NULL;
 }
 
 static void equeue_mem_dealloc(equeue_t *q, struct equeue_event *e) {
@@ -170,7 +171,7 @@ static void equeue_mem_dealloc(equeue_t *q, struct equeue_event *e) {
         e->sibling = *p;
         e->next = (*p)->next;
     } else {
-        e->sibling = 0;
+        e->sibling = NULL;
         e->next = *p;
     }
     *p = e;
@@ -181,12 +182,12 @@ static void equeue_mem_dealloc(equeue_t *q, struct equeue_event *e) {
 void *equeue_alloc(equeue_t *q, size_t size) {
     struct equeue_event *e = equeue_mem_alloc(q, size);
     if (!e) {
-        return 0;
+        return NULL;
     }
 
     e->target = 0;
     e->period = -1;
-    e->dtor = 0;
+    e->dtor = NULL;
 
     return e + 1;
 }
@@ -203,9 +204,10 @@ void equeue_dealloc(equeue_t *q, void *p) {
 
 
 // equeue scheduling functions
-static int equeue_enqueue(equeue_t *q, struct equeue_event *e, unsigned tick) {
+static equeue_id_t equeue_enqueue(equeue_t *q,
+        struct equeue_event *e, equeue_tick_t tick) {
     // setup event and hash local id with buffer offset for unique id
-    int id = (e->id << q->npw2) | ((unsigned char *)e - q->buffer);
+    equeue_id_t id = (e->id << q->npw2) | ((unsigned char *)e - q->buffer);
     e->target = tick + equeue_clampdiff(e->target, tick);
     e->generation = q->generation;
 
@@ -224,7 +226,7 @@ static int equeue_enqueue(equeue_t *q, struct equeue_event *e, unsigned tick) {
             e->next->ref = &e->next;
         }
         e->sibling = *p;
-        e->sibling->next = 0;
+        e->sibling->next = NULL;
         e->sibling->ref = &e->sibling;
     } else {
         e->next = *p;
@@ -232,7 +234,7 @@ static int equeue_enqueue(equeue_t *q, struct equeue_event *e, unsigned tick) {
             e->next->ref = &e->next;
         }
 
-        e->sibling = 0;
+        e->sibling = NULL;
     }
 
     *p = e;
@@ -250,7 +252,7 @@ static int equeue_enqueue(equeue_t *q, struct equeue_event *e, unsigned tick) {
     return id;
 }
 
-static struct equeue_event *equeue_unqueue(equeue_t *q, int id) {
+static struct equeue_event *equeue_unqueue(equeue_t *q, equeue_id_t id) {
     // decode event from unique id and check that the local id matches
     struct equeue_event *e = (struct equeue_event *)
             &q->buffer[id & ((1 << q->npw2)-1)];
@@ -258,17 +260,17 @@ static struct equeue_event *equeue_unqueue(equeue_t *q, int id) {
     equeue_mutex_lock(&q->queuelock);
     if (e->id != id >> q->npw2) {
         equeue_mutex_unlock(&q->queuelock);
-        return 0;
+        return NULL;
     }
 
     // clear the event and check if already in-flight
-    e->cb = 0;
+    e->cb = NULL;
     e->period = -1;
 
-    int diff = equeue_tickdiff(e->target, q->tick);
+    equeue_stick_t diff = equeue_tickdiff(e->target, q->tick);
     if (diff < 0 || (diff == 0 && e->generation != q->generation)) {
         equeue_mutex_unlock(&q->queuelock);
-        return 0;
+        return NULL;
     }
 
     // disentangle from queue
@@ -293,7 +295,7 @@ static struct equeue_event *equeue_unqueue(equeue_t *q, int id) {
     return e;
 }
 
-static struct equeue_event *equeue_dequeue(equeue_t *q, unsigned target) {
+static struct equeue_event *equeue_dequeue(equeue_t *q, equeue_tick_t target) {
     equeue_mutex_lock(&q->queuelock);
 
     // find all expired events and mark a new generation
@@ -313,7 +315,7 @@ static struct equeue_event *equeue_dequeue(equeue_t *q, unsigned target) {
         q->queue->ref = &q->queue;
     }
 
-    *p = 0;
+    *p = NULL;
 
     equeue_mutex_unlock(&q->queuelock);
 
@@ -324,7 +326,7 @@ static struct equeue_event *equeue_dequeue(equeue_t *q, unsigned target) {
         struct equeue_event *es = ess;
         ess = es->next;
 
-        struct equeue_event *prev = 0;
+        struct equeue_event *prev = NULL;
         for (struct equeue_event *e = es; e; e = e->sibling) {
             e->next = prev;
             prev = e;
@@ -337,42 +339,41 @@ static struct equeue_event *equeue_dequeue(equeue_t *q, unsigned target) {
     return head;
 }
 
-int equeue_post(equeue_t *q, void (*cb)(void*), void *p) {
+equeue_id_t equeue_post(equeue_t *q, void (*cb)(void*), void *p) {
     struct equeue_event *e = (struct equeue_event*)p - 1;
-    unsigned tick = equeue_tick();
+    equeue_tick_t tick = equeue_tick();
     e->cb = cb;
     e->target = tick + e->target;
 
-    int id = equeue_enqueue(q, e, tick);
+    equeue_id_t id = equeue_enqueue(q, e, tick);
     equeue_sema_signal(&q->eventsema);
     return id;
 }
 
-bool equeue_cancel(equeue_t *q, int id) {
-    if (!id) {
-        return false;
+int equeue_cancel(equeue_t *q, equeue_id_t id) {
+    if (id <= 0) {
+        return EQUEUE_ERR_NOENT;
     }
 
     struct equeue_event *e = equeue_unqueue(q, id);
     if (e) {
         equeue_dealloc(q, e + 1);
-        return true;
+        return 0;
     } else {
-        return false;
+        return EQUEUE_ERR_NOENT;
     }
 }
 
-int equeue_timeleft(equeue_t *q, int id) {
-    int ret = -1;
-
-    if (!id) {
-        return -1;
+int equeue_timeleft(equeue_t *q, equeue_id_t id) {
+    if (id <= 0) {
+        return EQUEUE_ERR_NOENT;
     }
 
     // decode event from unique id and check that the local id matches
     struct equeue_event *e = (struct equeue_event *)
             &q->buffer[id & ((1 << q->npw2)-1)];
 
+    int ret = EQUEUE_ERR_NOENT;
     equeue_mutex_lock(&q->queuelock);
     if (e->id == id >> q->npw2) {
         ret = equeue_clampdiff(e->target, equeue_tick());
@@ -388,9 +389,9 @@ void equeue_break(equeue_t *q) {
     equeue_sema_signal(&q->eventsema);
 }
 
-void equeue_dispatch(equeue_t *q, int ms) {
-    unsigned tick = equeue_tick();
-    unsigned timeout = tick + ms;
+int equeue_dispatch(equeue_t *q, equeue_stick_t ms) {
+    equeue_tick_t tick = equeue_tick();
+    equeue_tick_t timeout = tick + ms;
     q->background.active = false;
 
     while (1) {
@@ -418,7 +419,7 @@ void equeue_dispatch(equeue_t *q, int ms) {
             }
         }
 
-        int deadline = -1;
+        equeue_stick_t deadline = -1;
         tick = equeue_tick();
 
         // check if we should stop dispatching soon
@@ -436,15 +437,15 @@ void equeue_dispatch(equeue_t *q, int ms) {
                     equeue_mutex_unlock(&q->queuelock);
                 }
                 q->break_requested = false;
-                return;
+                return EQUEUE_ERR_TIMEDOUT;
             }
         }
 
         // find closest deadline
         equeue_mutex_lock(&q->queuelock);
         if (q->queue) {
-            int diff = equeue_clampdiff(q->queue->target, tick);
-            if ((unsigned)diff < (unsigned)deadline) {
+            equeue_stick_t diff = equeue_clampdiff(q->queue->target, tick);
+            if ((equeue_tick_t)diff < (equeue_tick_t)deadline) {
                 deadline = diff;
             }
         }
@@ -459,7 +460,7 @@ void equeue_dispatch(equeue_t *q, int ms) {
             if (q->break_requested) {
                 q->break_requested = false;
                 equeue_mutex_unlock(&q->queuelock);
-                return;
+                return EQUEUE_ERR_BREAK;
             }
             equeue_mutex_unlock(&q->queuelock);
         }
@@ -471,12 +472,12 @@ void equeue_dispatch(equeue_t *q, int ms) {
 
 
 // event functions
-void equeue_event_delay(void *p, int ms) {
+void equeue_event_delay(void *p, equeue_stick_t ms) {
     struct equeue_event *e = (struct equeue_event*)p - 1;
     e->target = ms;
 }
 
-void equeue_event_period(void *p, int ms) {
+void equeue_event_period(void *p, equeue_stick_t ms) {
     struct equeue_event *e = (struct equeue_event*)p - 1;
     e->period = ms;
 }
@@ -501,7 +502,7 @@ static void ecallback_dispatch(void *p) {
 int equeue_call(equeue_t *q, void (*cb)(void*), void *data) {
     struct ecallback *e = equeue_alloc(q, sizeof(struct ecallback));
     if (!e) {
-        return 0;
+        return EQUEUE_ERR_NOMEM;
     }
 
     e->cb = cb;
@@ -512,7 +513,7 @@ int equeue_call(equeue_t *q, void (*cb)(void*), void *data) {
 int equeue_call_in(equeue_t *q, int ms, void (*cb)(void*), void *data) {
     struct ecallback *e = equeue_alloc(q, sizeof(struct ecallback));
     if (!e) {
-        return 0;
+        return EQUEUE_ERR_NOMEM;
     }
 
     equeue_event_delay(e, ms);
@@ -524,7 +525,7 @@ int equeue_call_in(equeue_t *q, int ms, void (*cb)(void*), void *data) {
 int equeue_call_every(equeue_t *q, int ms, void (*cb)(void*), void *data) {
     struct ecallback *e = equeue_alloc(q, sizeof(struct ecallback));
     if (!e) {
-        return 0;
+        return EQUEUE_ERR_NOMEM;
     }
 
     equeue_event_delay(e, ms);
@@ -537,7 +538,7 @@ int equeue_call_every(equeue_t *q, int ms, void (*cb)(void*), void *data) {
 
 // backgrounding
 void equeue_background(equeue_t *q,
-        void (*update)(void *timer, int ms), void *timer) {
+        void (*update)(void *timer, equeue_stick_t ms), void *timer) {
     equeue_mutex_lock(&q->queuelock);
     if (q->background.update) {
         q->background.update(q->background.timer, -1);
@@ -557,14 +558,14 @@ void equeue_background(equeue_t *q,
 struct equeue_chain_context {
     equeue_t *q;
     equeue_t *target;
-    int id;
+    equeue_id_t id;
 };
 
 static void equeue_chain_dispatch(void *p) {
     equeue_dispatch((equeue_t *)p, 0);
 }
 
-static void equeue_chain_update(void *p, int ms) {
+static void equeue_chain_update(void *p, equeue_stick_t ms) {
     struct equeue_chain_context *c = (struct equeue_chain_context *)p;
     equeue_cancel(c->target, c->id);
 
@@ -577,14 +578,14 @@ static void equeue_chain_update(void *p, int ms) {
 
 int equeue_chain(equeue_t *q, equeue_t *target) {
     if (!target) {
-        equeue_background(q, 0, 0);
+        equeue_background(q, NULL, NULL);
         return 0;
     }
 
     struct equeue_chain_context *c = equeue_alloc(q,
             sizeof(struct equeue_chain_context));
     if (!c) {
-        return -1;
+        return EQUEUE_ERR_NOMEM;
     }
 
     c->q = q;

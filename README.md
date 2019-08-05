@@ -192,6 +192,10 @@ The equeue library has a minimal porting layer that is flexible depending
 on the requirements of the underlying platform. Platform specific declarations
 and more information can be found in [equeue_platform.h](equeue_platform.h).
 
+It's possible to override both [equeue_platform.h](equeue_platform.h) and
+[equeue_util.h](equeue_util.h) with a custom implementation by defining
+EQUEUE_PLATFORM or EQUEUE_UTIL, but PRs are welcome for new platforms.
+
 ## Tests ##
 
 The equeue library uses a set of local tests based on the posix implementation.

@@ -7,13 +7,13 @@
  */
 #include "equeue_platform.h"
 
-#if defined(EQUEUE_PLATFORM_FREERTOS)
+#if defined(EQUEUE_PLATFORM_FREERTOS) && !defined(EQUEUE_PLATFORM)
 
 #include "task.h"
 
 
 // Ticker operations
-unsigned equeue_tick(void) {
+equeue_tick_t equeue_tick(void) {
     return xTaskGetTickCountFromISR() * portTICK_PERIOD_MS;
 }
 
@@ -52,7 +52,7 @@ bool equeue_sema_wait(equeue_sema_t *s, int ms) {
         ms = ms / portTICK_PERIOD_MS;
     }
 
-    return xSemaphoreTake(s->handle, ms);
+    return xSemaphoreTake(s->handle, ms) ? 0 : EQUEUE_ERR_TIMEDOUT;
 }
 
 

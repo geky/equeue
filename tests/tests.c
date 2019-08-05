@@ -271,7 +271,8 @@ void cancel_test(int N) {
     }
 
     for (int i = N-1; i >= 0; i--) {
-        equeue_cancel(&q, ids[i]);
+        err = equeue_cancel(&q, ids[i]);
+        test_assert(!err);
     }
 
     free(ids);
@@ -290,13 +291,15 @@ void cancel_inflight_test(void) {
     bool touched = false;
 
     int id = equeue_call(&q, simple_func, &touched);
-    equeue_cancel(&q, id);
+    err = equeue_cancel(&q, id);
+    test_assert(!err);
 
     equeue_dispatch(&q, 0);
     test_assert(!touched);
 
     id = equeue_call(&q, simple_func, &touched);
-    equeue_cancel(&q, id);
+    err = equeue_cancel(&q, id);
+    test_assert(!err);
 
     equeue_dispatch(&q, 0);
     test_assert(!touched);
@@ -339,6 +342,9 @@ void cancel_unnecessarily_test(void) {
         equeue_cancel(&q, id);
     }
 
+    err = equeue_cancel(&q, id);
+    test_assert(err == EQUEUE_ERR_NOENT);
+
     equeue_dispatch(&q, 0);
     test_assert(touched);
 
@@ -374,8 +380,9 @@ void break_test(void) {
     equeue_call_every(&q, 0, simple_func, &touched);
 
     equeue_break(&q);
-    equeue_dispatch(&q, -1);
+    err = equeue_dispatch(&q, -1);
     test_assert(touched);
+    test_assert(err == EQUEUE_ERR_BREAK);
 
     equeue_destroy(&q);
 }
@@ -390,12 +397,14 @@ void break_no_windup_test(void) {
 
     equeue_break(&q);
     equeue_break(&q);
-    equeue_dispatch(&q, -1);
+    err = equeue_dispatch(&q, -1);
     test_assert(count == 1);
+    test_assert(err == EQUEUE_ERR_BREAK);
 
     count = 0;
-    equeue_dispatch(&q, 550);
+    err = equeue_dispatch(&q, 550);
     test_assert(count > 1);
+    test_assert(err == EQUEUE_ERR_TIMEDOUT);
 
     equeue_destroy(&q);
 }

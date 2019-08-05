@@ -6,7 +6,7 @@
  */
 #include "equeue_platform.h"
 
-#if defined(EQUEUE_PLATFORM_POSIX)
+#if defined(EQUEUE_PLATFORM_POSIX) && !defined(EQUEUE_PLATFORM)
 
 #include <time.h>
 #include <sys/time.h>
@@ -14,16 +14,16 @@
 
 
 // Tick operations
-unsigned equeue_tick(void) {
+equeue_tick_t equeue_tick(void) {
     struct timeval tv;
     gettimeofday(&tv, 0);
-    return (unsigned)(tv.tv_sec*1000 + tv.tv_usec/1000);
+    return (equeue_tick_t)(tv.tv_sec*1000 + tv.tv_usec/1000);
 }
 
 
 // Mutex operations
 int equeue_mutex_create(equeue_mutex_t *m) {
-    return pthread_mutex_init(m, 0);
+    return -pthread_mutex_init(m, 0);
 }
 
 void equeue_mutex_destroy(equeue_mutex_t *m) {
@@ -43,12 +43,12 @@ void equeue_mutex_unlock(equeue_mutex_t *m) {
 int equeue_sema_create(equeue_sema_t *s) {
     int err = pthread_mutex_init(&s->mutex, 0);
     if (err) {
-        return err;
+        return -err;
     }
 
     err = pthread_cond_init(&s->cond, 0);
     if (err) {
-        return err;
+        return -err;
     }
 
     s->signal = false;
@@ -67,7 +67,7 @@ void equeue_sema_signal(equeue_sema_t *s) {
     pthread_mutex_unlock(&s->mutex);
 }
 
-bool equeue_sema_wait(equeue_sema_t *s, int ms) {
+int equeue_sema_wait(equeue_sema_t *s, int ms) {
     pthread_mutex_lock(&s->mutex);
     if (!s->signal) {
         if (ms < 0) {
@@ -89,7 +89,7 @@ bool equeue_sema_wait(equeue_sema_t *s, int ms) {
     s->signal = false;
     pthread_mutex_unlock(&s->mutex);
 
-    return signal;
+    return signal ? 0 : EQUEUE_ERR_TIMEDOUT;
 }
 
 #endif

@@ -6,13 +6,13 @@
  */
 #include "equeue_platform.h"
 
-#if defined(EQUEUE_PLATFORM_WINDOWS)
+#if defined(EQUEUE_PLATFORM_WINDOWS) && !defined(EQUEUE_PLATFORM)
 
 #include <windows.h>
 
 
 // Tick operations
-unsigned equeue_tick(void) {
+equeue_tick_t equeue_tick(void) {
     return GetTickCount();
 }
 
@@ -50,12 +50,13 @@ void equeue_sema_signal(equeue_sema_t *s) {
     ReleaseSemaphore(*s, 1, NULL);
 }
 
-bool equeue_sema_wait(equeue_sema_t *s, int ms) {
+int equeue_sema_wait(equeue_sema_t *s, int ms) {
     if (ms < 0) {
         ms = INFINITE;
     }
 
-    return WaitForSingleObject(*s, ms) == WAIT_OBJECT_0;
+    return WaitForSingleObject(*s, ms) == WAIT_OBJECT_0
+        ? 0 : EQUEUE_ERR_TIMEDOUT;
 }
 
 

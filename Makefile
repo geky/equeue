@@ -4,7 +4,7 @@ CC ?= gcc
 AR ?= ar
 SIZE ?= size
 
-SRC += $(wildcard *.c)
+SRC += $(wildcard *.c platforms/*.c)
 OBJ := $(SRC:.c=.o)
 DEP := $(SRC:.c=.d)
 ASM := $(SRC:.c=.s)

@@ -1,28 +1,33 @@
 /* 
- * System specific implementation
+ * Platform specific implementation
  *
  * Copyright (c) 2016 Christopher Haster
  * Distributed under the MIT license
+ *
+ * Can be overridden by users with their own configuration by defining
+ * EQUEUE_PLATFORM as a header file (-DEQUEUE_PLATFORM=my_equeue_platform.h)
+ *
+ * If EQUEUE_PLATFORM is defined, none of the default definitions will be
+ * emitted and must be provided by the user's header file. To start, I would
+ * suggest copying equeue_platform.h and modifying as needed.
+ *
+ * But! If you get support for a new platform working, please create a PR at
+ * github.com/geky/equeue. Any contributions are greatly appreciated.
  */
 #ifndef EQUEUE_PLATFORM_H
 #define EQUEUE_PLATFORM_H
+
+#include "equeue_util.h"
+
+#ifdef EQUEUE_PLATFORM
+#include EQUEUE_STRINGIZE(EQUEUE_PLATFORM)
+#else
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <stdbool.h>
-
-// Currently supported platforms
-//
-// Uncomment to select a supported platform or reimplement this file
-// for a specific target.
-//#define EQUEUE_PLATFORM_POSIX
-//#define EQUEUE_PLATFORM_WINDOWS
-//#define EQUEUE_PLATFORM_MBED
-//#define EQUEUE_PLATFORM_FREERTOS
-
-// Try to infer a platform if none was manually selected
+// Try to infer a platform if none was manually defined
 #if !defined(EQUEUE_PLATFORM_POSIX)     \
  && !defined(EQUEUE_PLATFORM_WINDOWS)   \
  && !defined(EQUEUE_PLATFORM_MBED)      \
@@ -52,6 +57,16 @@ extern "C" {
 #endif
 
 
+// Millisecond tick type
+//
+// equeue ticks are expected to overflow, which gives us 31-bits of usable
+// range. This gives us ~25 days of measurement.
+//
+// While theoretically possible, it is NOT suggested to redefine this type
+// as equeue users likely expect a 32-bit millisecond range.
+typedef uint32_t equeue_tick_t;
+typedef int32_t equeue_stick_t;
+
 // Platform millisecond counter
 //
 // Return a tick that represents the number of milliseconds that have passed
@@ -59,8 +74,8 @@ extern "C" {
 // the millisecond level, however the accuracy of the equeue library is
 // limited by the accuracy of this tick.
 //
-// Must intentionally overflow to 0 after 2^32-1
-unsigned equeue_tick(void);
+// Must overflow to 0 after 2^32-1
+equeue_tick_t equeue_tick(void);
 
 
 // Platform mutex type
@@ -138,17 +153,21 @@ typedef struct equeue_sema {
 //
 // The equeue_sema_wait waits for a semaphore to be signalled or returns
 // immediately if equeue_sema_signal had been called since the last
-// equeue_sema_wait. The equeue_sema_wait returns true if it detected that
-// equeue_sema_signal had been called. If ms is negative, equeue_sema_wait
-// will wait for a signal indefinitely.
+// equeue_sema_wait. equeue_sema_wait should return 0 if it detected that
+// equeue_sema_signal had been called, EQUEUE_ERR_TIMEDOUT if a timeout
+// occurs, or a different error code. Though note these are all ignored by
+// equeue.
+//
+// If ms is negative, equeue_sema_wait must wait for a signal indefinitely.
 int equeue_sema_create(equeue_sema_t *sema);
 void equeue_sema_destroy(equeue_sema_t *sema);
 void equeue_sema_signal(equeue_sema_t *sema);
-bool equeue_sema_wait(equeue_sema_t *sema, int ms);
+int equeue_sema_wait(equeue_sema_t *sema, equeue_stick_t ms);
 
 
 #ifdef __cplusplus
 }
 #endif
 
+#endif
 #endif
