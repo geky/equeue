@@ -232,7 +232,9 @@ static int equeue_enqueue(equeue_t *q, equeue_event_t *e,
     }
 
     // insert at head in slot
-    if (*p && (*p)->target == e->target) {
+    if (*p &&
+            (*p)->target == e->target &&
+            (*p)->priority == e->priority) {
         e->next = (*p)->next;
         if (e->next) {
             e->next->ref = &e->next;
