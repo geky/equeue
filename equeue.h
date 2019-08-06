@@ -26,11 +26,20 @@ extern "C" {
 // Type of event ids, used to represent queued events
 typedef int32_t equeue_id_t;
 
+// 8-bit priorities for option event prioritization
+//
+// Note that equeue does not offer preemption, which means high
+// priority events can still be blocks by low priority events.
+// Higher numbers are higher priority, and 0, the lowest, is the
+// default for new events.
+typedef uint8_t equeue_priority_t;
+
 // Event structure
 typedef struct equeue_event {
     size_t size;
     uint8_t id;
     uint8_t generation;
+    equeue_priority_t priority;
 
     struct equeue_event *next;
     struct equeue_event *sibling;
@@ -157,11 +166,13 @@ void equeue_dealloc(equeue_t *queue, void *event);
 
 // Configure an allocated event
 //
-// equeue_setdelay  - Millisecond delay before dispatching an event
-// equeue_setperiod - Millisecond period for repeatedly dispatching event
-// equeue_setdtor   - Destructor to run when the event is deallocated
+// equeue_setdelay    - Millisecond delay before dispatching an event
+// equeue_setperiod   - Millisecond period for repeatedly dispatching event
+// equeue_setpriority - Set priority of the event, defaults to 0, the lowest
+// equeue_setdtor     - Destructor to run when the event is deallocated
 void equeue_setdelay(equeue_t *q, void *event, equeue_stick_t ms);
 void equeue_setperiod(equeue_t *q, void *event, equeue_stick_t ms);
+void equeue_setpriority(equeue_t *q, void *event, equeue_priority_t priority);
 void equeue_setdtor(equeue_t *q, void *event, void (*dtor)(void *));
 
 // Post an event onto the event queue
@@ -221,16 +232,18 @@ void equeue_event_destroy(equeue_t *q, equeue_event_t *event);
 // can be used to determine if an event is currently pending but is risky
 // unless you are the only thread posting the static event.
 //
-// equeue_event_setcb     - Callback to run when event is dispatched
-// equeue_event_setdelay  - Millisecond delay before dispatching an event
-// equeue_event_setperiod - Millisecond period for repeatedly dispatching event
-// equeue_event_setdtor   - Destructor to run when the event is deallocated
+// equeue_event_setcb       - Callback to run when event is dispatched
+// equeue_event_setdelay    - Millisecond delay before dispatching an event
+// equeue_event_setperiod   - Millisecond period for repeatedly dispatching
+// equeue_event_setpriority - Set priority of the event, defaults to 0
 void equeue_event_setcb(equeue_t *q,
         equeue_event_t *event, void (*cb)(equeue_event_t*));
 void equeue_event_setdelay(equeue_t *q,
         equeue_event_t *event, equeue_stick_t ms);
 void equeue_event_setperiod(equeue_t *q,
         equeue_event_t *event, equeue_stick_t ms);
+void equeue_event_setpriority(equeue_t *q,
+        equeue_event_t *event, equeue_priority_t priority);
 
 // Post a static event onto the event queue
 //

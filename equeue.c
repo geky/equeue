@@ -188,6 +188,7 @@ void *equeue_alloc(equeue_t *q, size_t size) {
 
     e->target = 0;
     e->period = -1;
+    e->priority = 0;
     e->x.dtor = NULL;
 
     return e + 1;
@@ -219,9 +220,14 @@ static int equeue_enqueue(equeue_t *q, equeue_event_t *e,
     }
     e->id = id;
 
-    // find the event slot
+    // find the correct event slot
+    // sort first by target tick, then by priority
+    // if equal, we insert in front, which sounds weird, but it's more
+    // efficient, and we later reverse this during dispatch
     equeue_event_t **p = &q->queue;
-    while (*p && equeue_tickdiff((*p)->target, e->target) < 0) {
+    while (*p && (
+            equeue_tickdiff((*p)->target, e->target) < 0 ||
+            (*p)->priority < e->priority)) {
         p = &(*p)->next;
     }
 
@@ -497,6 +503,12 @@ void equeue_setperiod(equeue_t *q, void *p, equeue_stick_t ms) {
     e->period = ms;
 }
 
+void equeue_setpriority(equeue_t *q, void *p, equeue_priority_t priority) {
+    (void)q;
+    equeue_event_t *e = (equeue_event_t*)p - 1;
+    e->priority = priority;
+}
+
 void equeue_setdtor(equeue_t *q, void *p, void (*dtor)(void*)) {
     (void)q;
     equeue_event_t *e = (equeue_event_t*)p - 1;
@@ -559,6 +571,7 @@ int equeue_event_create(equeue_t *q, equeue_event_t *e) {
     // defaults
     e->target = 0;
     e->period = -1;
+    e->priority = 0;
     e->x.dtor = NULL;
 
     return 0;
@@ -585,6 +598,12 @@ void equeue_event_setperiod(equeue_t *q,
         equeue_event_t *e, equeue_stick_t ms) {
     EQUEUE_ASSERT(e->id != EQUEUE_PENDING);
     e->period = ms;
+}
+
+void equeue_event_setpriority(equeue_t *q,
+        equeue_event_t *e, equeue_priority_t priority) {
+    EQUEUE_ASSERT(e->id != EQUEUE_PENDING);
+    e->priority = priority;
 }
 
 static void equeue_event_cb(void *p) {
