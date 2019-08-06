@@ -26,35 +26,15 @@ extern "C" {
 // Type of event ids, used to represent queued events
 typedef int32_t equeue_id_t;
 
-// Event header structure
-//
-// Note that it is possible to create your own static events with
-// this structure by prefixing a structure you wish to queue with this
-// header.
-//
-// However, there is a quirk in that equeue event operations expect a pointer
-// to the data after the header, not the header itself. You will need to offset
-// references to the header when calling equeue_event_* functions
-//
-//     struct myevent {
-//         equeue_event_header_t header;
-//         uint32_t data;
-//     };
-//
-//     struct myevent e;
-//     equeue_post(&q, &e + 1);
-//
-// Because the internals of equeue_event_header_t are susceptible to change,
-// modifications to the event should always be done through the equeue_event_*
-// functions.
-typedef struct equeue_event_header {
+// Event structure
+typedef struct equeue_event {
     size_t size;
     uint8_t id;
     uint8_t generation;
 
-    struct equeue_event_header *next;
-    struct equeue_event_header *sibling;
-    struct equeue_event_header **ref;
+    struct equeue_event *next;
+    struct equeue_event *sibling;
+    struct equeue_event **ref;
 
     equeue_tick_t target;
     equeue_stick_t period;
@@ -62,20 +42,20 @@ typedef struct equeue_event_header {
 
     void (*cb)(void *);
     // data follows
-} equeue_event_header_t;
+} equeue_event_t;
 
 // Event queue structure
 typedef struct equeue {
-    equeue_event_header_t *queue;
+    equeue_event_t *queue;
     equeue_tick_t tick;
     bool break_requested;
     uint8_t generation;
 
-    uint8_t *buffer;
     uint8_t npw2;
+    uint8_t *buffer;
     void *allocated;
 
-    equeue_event_header_t *chunks;
+    equeue_event_t *chunks;
     struct equeue_slab {
         size_t size;
         uint8_t *data;
@@ -99,6 +79,10 @@ typedef struct equeue {
 // buffer of the specified size with malloc or uses a user provided buffer
 // if constructed with equeue_create_inplace. If a buffer is provided, it
 // it must be word aligned.
+//
+// The size of events depends on the size allocated. For simple events
+// using the equeue_call_* functions, each event uses
+// (sizeof(equeue_event_t) + 2*sizeof(uintptr_t)) bytes of memory.
 //
 // If the event queue creation fails, equeue_create returns a negative
 // error code.
@@ -170,12 +154,12 @@ void equeue_dealloc(equeue_t *queue, void *event);
 
 // Configure an allocated event
 //
-// equeue_event_delay  - Millisecond delay before dispatching an event
-// equeue_event_period - Millisecond period for repeating dispatching an event
-// equeue_event_dtor   - Destructor to run when the event is deallocated
-void equeue_event_delay(void *event, equeue_stick_t ms);
-void equeue_event_period(void *event, equeue_stick_t ms);
-void equeue_event_dtor(void *event, void (*dtor)(void *));
+// equeue_setdelay  - Millisecond delay before dispatching an event
+// equeue_setperiod - Millisecond period for repeatedly dispatching event
+// equeue_setdtor   - Destructor to run when the event is deallocated
+void equeue_setdelay(equeue_t *q, void *event, equeue_stick_t ms);
+void equeue_setperiod(equeue_t *q, void *event, equeue_stick_t ms);
+void equeue_setdtor(equeue_t *q, void *event, void (*dtor)(void *));
 
 // Post an event onto the event queue
 //
@@ -188,9 +172,7 @@ void equeue_event_dtor(void *event, void (*dtor)(void *));
 // moving events out of irq contexts.
 //
 // The return value is a unique id that represents the posted event and can
-// be passed to equeue_cancel, unless the event is statically allocated, in
-// which case the id will be 0 and functions such as equeue_event_cancel must
-// be used directly.
+// be passed to equeue_cancel. 
 equeue_id_t equeue_post(equeue_t *queue, void (*cb)(void *), void *event);
 
 // Cancel an in-flight event
@@ -219,28 +201,54 @@ int equeue_cancel(equeue_t *queue, equeue_id_t id);
 // This function is irq safe.
 //
 // If the event is not in the queue, LFS_ERR_NOENT is returned.
-equeue_stick_t equeue_timeleft(equeue_t *q, equeue_id_t id);
+equeue_stick_t equeue_gettimeleft(equeue_t *q, equeue_id_t id);
 
-// Create a statically allocated event given a buffer prefixed by
-// equeue_event_header_t.
+// Create a statically allocated event
 //
-// equeue_event_destroy cleans up any resources used by the event, however
-// because the event is statically allocated, this is equivalent to
-// equeue_event_cancel. TODO dtors?
-int equeue_event_create(void *event);
-void equeue_event_destroy(void *event);
+// The equeue_event_t struct serves as a header for static events.
+// Additional data may follow the equeue_event_t struct, a reference
+// to which will be passed to the callback during execution.
+int equeue_event_create(equeue_t *q, equeue_event_t *event);
+void equeue_event_destroy(equeue_t *q, equeue_event_t *event);
+
+// Configure a statically allocated event
+//
+// It is illegal to change these values after equeue_event_post while
+// an event is pending on an event queue. equeue_event_gettimeleft
+// can be used to determine if an event is currently pending but is risky
+// unless you are the only thread posting the static event.
+//
+// equeue_event_setdelay  - Millisecond delay before dispatching an event
+// equeue_event_setperiod - Millisecond period for repeatedly dispatching event
+// equeue_event_setdtor   - Destructor to run when the event is deallocated
+void equeue_event_setdelay(equeue_t *q,
+        equeue_event_t *event, equeue_stick_t ms);
+void equeue_event_setperiod(equeue_t *q,
+        equeue_event_t *event, equeue_stick_t ms);
+void equeue_event_setdtor(equeue_t *q,
+        equeue_event_t *event, void (*dtor)(void *));
+
+// Post a static event onto the event queue
+//
+// Similar to equeue_post but operates on static events
+//
+// If the statically allocated event is already pending on the event queue,
+// nothing happens, allowing coalescing of multiple events into a single
+// function call.
+//
+// Returns 0 on success or a negative error code on failure, currently
+// can not fail
+int equeue_event_post(equeue_t *q, void (*cb)(void*), equeue_event_t *event);
 
 // Cancels an in-flight, statically allocated event
 //
-// This is the same as equeue_cancel, but can be used on a static event when
-// an id is not available.
-int equeue_event_cancel(void *event);
+// This is similar to equeue_cancel, but operates on static events
+int equeue_event_cancel(equeue_t *q, equeue_event_t *event);
 
-// Query how much time is left for a delayed, statically-allocated event
+// Query how much time is left for a statically-allocated event
 //
-// This is the same as equeue_timeleft, but can be used on a static event when
-// an id is not available.
-equeue_stick_t equeue_event_timeleft(void *event);
+// This is the same as equeue_gettimeleft, but operates on static events
+equeue_stick_t equeue_event_gettimeleft(equeue_t *q, equeue_event_t *event);
 
 // Background an event queue onto a single-shot timer
 //

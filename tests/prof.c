@@ -126,7 +126,7 @@ void equeue_tick_prof(void) {
 
 void equeue_alloc_prof(void) {
     struct equeue q;
-    equeue_create(&q, 32*EQUEUE_EVENT_SIZE);
+    equeue_create(&q, 32*sizeof(equeue_event_t));
 
     prof_loop() {
         prof_start();
@@ -141,7 +141,8 @@ void equeue_alloc_prof(void) {
 
 void equeue_alloc_many_prof(int count) {
     struct equeue q;
-    equeue_create(&q, count*EQUEUE_EVENT_SIZE);
+    equeue_create(&q, count*(
+            sizeof(equeue_event_t) + 2*sizeof(uintptr_t)));
 
     void *es[count];
 
@@ -166,7 +167,7 @@ void equeue_alloc_many_prof(int count) {
 
 void equeue_post_prof(void) {
     struct equeue q;
-    equeue_create(&q, EQUEUE_EVENT_SIZE);
+    equeue_create(&q, sizeof(equeue_event_t));
 
     prof_loop() {
         void *e = equeue_alloc(&q, 0);
@@ -183,7 +184,8 @@ void equeue_post_prof(void) {
 
 void equeue_post_many_prof(int count) {
     struct equeue q;
-    equeue_create(&q, count*EQUEUE_EVENT_SIZE);
+    equeue_create(&q, count*(
+            sizeof(equeue_event_t) + 2*sizeof(uintptr_t)));
 
     for (int i = 0; i < count-1; i++) {
         equeue_call(&q, no_func, 0);
@@ -204,11 +206,11 @@ void equeue_post_many_prof(int count) {
 
 void equeue_post_future_prof(void) {
     struct equeue q;
-    equeue_create(&q, EQUEUE_EVENT_SIZE);
+    equeue_create(&q, sizeof(equeue_event_t));
 
     prof_loop() {
         void *e = equeue_alloc(&q, 0);
-        equeue_event_delay(e, 1000);
+        equeue_setdelay(&q, e, 1000);
 
         prof_start();
         int id = equeue_post(&q, no_func, e);
@@ -222,7 +224,8 @@ void equeue_post_future_prof(void) {
 
 void equeue_post_future_many_prof(int count) {
     struct equeue q;
-    equeue_create(&q, count*EQUEUE_EVENT_SIZE);
+    equeue_create(&q, count*(
+            sizeof(equeue_event_t) + 2*sizeof(uintptr_t)));
 
     for (int i = 0; i < count-1; i++) {
         equeue_call(&q, no_func, 0);
@@ -230,7 +233,7 @@ void equeue_post_future_many_prof(int count) {
 
     prof_loop() {
         void *e = equeue_alloc(&q, 0);
-        equeue_event_delay(e, 1000);
+        equeue_setdelay(&q, e, 1000);
 
         prof_start();
         int id = equeue_post(&q, no_func, e);
@@ -244,7 +247,7 @@ void equeue_post_future_many_prof(int count) {
 
 void equeue_dispatch_prof(void) {
     struct equeue q;
-    equeue_create(&q, EQUEUE_EVENT_SIZE);
+    equeue_create(&q, sizeof(equeue_event_t));
 
     prof_loop() {
         equeue_call(&q, no_func, 0);
@@ -259,7 +262,8 @@ void equeue_dispatch_prof(void) {
 
 void equeue_dispatch_many_prof(int count) {
     struct equeue q;
-    equeue_create(&q, count*EQUEUE_EVENT_SIZE);
+    equeue_create(&q, count*(
+            sizeof(equeue_event_t) + 2*sizeof(uintptr_t)));
 
     prof_loop() {
         for (int i = 0; i < count; i++) {
@@ -276,7 +280,7 @@ void equeue_dispatch_many_prof(int count) {
 
 void equeue_cancel_prof(void) {
     struct equeue q;
-    equeue_create(&q, EQUEUE_EVENT_SIZE);
+    equeue_create(&q, sizeof(equeue_event_t));
 
     prof_loop() {
         int id = equeue_call(&q, no_func, 0);
@@ -291,7 +295,8 @@ void equeue_cancel_prof(void) {
 
 void equeue_cancel_many_prof(int count) {
     struct equeue q;
-    equeue_create(&q, count*EQUEUE_EVENT_SIZE);
+    equeue_create(&q, count*(
+            sizeof(equeue_event_t) + 2*sizeof(uintptr_t)));
 
     for (int i = 0; i < count-1; i++) {
         equeue_call(&q, no_func, 0);
@@ -309,7 +314,7 @@ void equeue_cancel_many_prof(int count) {
 }
 
 void equeue_alloc_size_prof(void) {
-    size_t size = 32*EQUEUE_EVENT_SIZE;
+    size_t size = 32*sizeof(equeue_event_t);
 
     struct equeue q;
     equeue_create(&q, size);
@@ -321,7 +326,7 @@ void equeue_alloc_size_prof(void) {
 }
 
 void equeue_alloc_many_size_prof(int count) {
-    size_t size = count*EQUEUE_EVENT_SIZE;
+    size_t size = count*(sizeof(equeue_event_t) + 2*sizeof(uintptr_t));
 
     struct equeue q;
     equeue_create(&q, size);
@@ -336,7 +341,7 @@ void equeue_alloc_many_size_prof(int count) {
 }
 
 void equeue_alloc_fragmented_size_prof(int count) {
-    size_t size = count*EQUEUE_EVENT_SIZE;
+    size_t size = count*(sizeof(equeue_event_t) + 2*sizeof(uintptr_t));
 
     struct equeue q;
     equeue_create(&q, size);

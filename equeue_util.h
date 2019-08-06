@@ -80,6 +80,15 @@ static inline void equeue_free(void *p) {
 // toolchain-specific implementations. EQUEUE_NO_INTRINSICS falls back to a more
 // expensive basic C implementation for debugging purposes
 
+// Align to nearest multiple of a size
+static inline uint32_t equeue_aligndown(uint32_t a, uint32_t alignment) {
+    return a - (a % alignment);
+}
+
+static inline uint32_t equeue_alignup(uint32_t a, uint32_t alignment) {
+    return equeue_aligndown(a + alignment-1, alignment);
+}
+
 // Find the sequence comparison of a and b, this is the distance
 // between a and b ignoring overflow
 static inline int32_t equeue_scmp(uint32_t a, uint32_t b) {
