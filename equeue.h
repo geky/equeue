@@ -38,7 +38,10 @@ typedef struct equeue_event {
 
     equeue_tick_t target;
     equeue_stick_t period;
-    void (*dtor)(void *);
+    union {
+        void (*dtor)(void *);
+        void (*cb)(struct equeue_event*);
+    } x;
 
     void (*cb)(void *);
     // data follows
@@ -218,15 +221,16 @@ void equeue_event_destroy(equeue_t *q, equeue_event_t *event);
 // can be used to determine if an event is currently pending but is risky
 // unless you are the only thread posting the static event.
 //
+// equeue_event_setcb     - Callback to run when event is dispatched
 // equeue_event_setdelay  - Millisecond delay before dispatching an event
 // equeue_event_setperiod - Millisecond period for repeatedly dispatching event
 // equeue_event_setdtor   - Destructor to run when the event is deallocated
+void equeue_event_setcb(equeue_t *q,
+        equeue_event_t *event, void (*cb)(equeue_event_t*));
 void equeue_event_setdelay(equeue_t *q,
         equeue_event_t *event, equeue_stick_t ms);
 void equeue_event_setperiod(equeue_t *q,
         equeue_event_t *event, equeue_stick_t ms);
-void equeue_event_setdtor(equeue_t *q,
-        equeue_event_t *event, void (*dtor)(void *));
 
 // Post a static event onto the event queue
 //
@@ -238,7 +242,7 @@ void equeue_event_setdtor(equeue_t *q,
 //
 // Returns 0 on success or a negative error code on failure, currently
 // can not fail
-int equeue_event_post(equeue_t *q, void (*cb)(void*), equeue_event_t *event);
+int equeue_event_post(equeue_t *q, equeue_event_t *event);
 
 // Cancels an in-flight, statically allocated event
 //

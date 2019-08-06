@@ -677,8 +677,8 @@ struct myevent {
     bool touched;
 };
 
-void myfunc(void *p) {
-    struct myevent *me = (struct myevent*)p - 1;
+void myfunc(equeue_event_t *e) {
+    struct myevent *me = (struct myevent*)e;
     me->touched = true;
 }
 
@@ -693,7 +693,8 @@ void static_test(void) {
     err = equeue_event_create(&q, &me.header);
     test_assert(!err);
 
-    err = equeue_event_post(&q, simple_func, &me.header);
+    equeue_event_setcb(&q, &me.header, myfunc);
+    err = equeue_event_post(&q, &me.header);
     test_assert(!err);
 
     equeue_dispatch(&q, 0);

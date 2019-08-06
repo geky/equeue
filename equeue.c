@@ -101,12 +101,12 @@ void equeue_destroy(equeue_t *q) {
     // call destructors on pending events
     for (equeue_event_t *es = q->queue; es; es = es->next) {
         for (equeue_event_t *e = es->sibling; e; e = e->sibling) {
-            if (e->dtor) {
-                e->dtor(e + 1);
+            if (e->x.dtor) {
+                e->x.dtor(e + 1);
             }
         }
-        if (es->dtor) {
-            es->dtor(es + 1);
+        if (es->x.dtor) {
+            es->x.dtor(es + 1);
         }
     }
     // notify background timer
@@ -190,7 +190,7 @@ void *equeue_alloc(equeue_t *q, size_t size) {
 
     e->target = 0;
     e->period = -1;
-    e->dtor = NULL;
+    e->x.dtor = NULL;
 
     return e + 1;
 }
@@ -198,8 +198,8 @@ void *equeue_alloc(equeue_t *q, size_t size) {
 void equeue_dealloc(equeue_t *q, void *p) {
     equeue_event_t *e = (equeue_event_t*)p - 1;
 
-    if (e->dtor) {
-        e->dtor(e+1);
+    if (e->x.dtor) {
+        e->x.dtor(e+1);
     }
 
     equeue_mem_dealloc(q, e);
@@ -499,36 +499,36 @@ void equeue_setperiod(equeue_t *q, void *p, equeue_stick_t ms) {
     e->period = ms;
 }
 
-void equeue_setdtor(equeue_t *q, void *p, void (*dtor)(void *)) {
+void equeue_setdtor(equeue_t *q, void *p, void (*dtor)(void*)) {
     (void)q;
     equeue_event_t *e = (equeue_event_t*)p - 1;
-    e->dtor = dtor;
+    e->x.dtor = dtor;
 }
 
 // simple callbacks
-struct ecallback {
+struct equeue_cb {
     void (*cb)(void*);
     void *data;
 };
 
-static void ecallback_dispatch(void *p) {
-    struct ecallback *e = (struct ecallback*)p;
+static void equeue_cb_dispatch(void *p) {
+    struct equeue_cb *e = (struct equeue_cb*)p;
     e->cb(e->data);
 }
 
 int equeue_call(equeue_t *q, void (*cb)(void*), void *data) {
-    struct ecallback *e = equeue_alloc(q, sizeof(struct ecallback));
+    struct equeue_cb *e = equeue_alloc(q, sizeof(struct equeue_cb));
     if (!e) {
         return EQUEUE_ERR_NOMEM;
     }
 
     e->cb = cb;
     e->data = data;
-    return equeue_post(q, ecallback_dispatch, e);
+    return equeue_post(q, equeue_cb_dispatch, e);
 }
 
 int equeue_call_in(equeue_t *q, int ms, void (*cb)(void*), void *data) {
-    struct ecallback *e = equeue_alloc(q, sizeof(struct ecallback));
+    struct equeue_cb *e = equeue_alloc(q, sizeof(struct equeue_cb));
     if (!e) {
         return EQUEUE_ERR_NOMEM;
     }
@@ -536,11 +536,11 @@ int equeue_call_in(equeue_t *q, int ms, void (*cb)(void*), void *data) {
     equeue_setdelay(q, e, ms);
     e->cb = cb;
     e->data = data;
-    return equeue_post(q, ecallback_dispatch, e);
+    return equeue_post(q, equeue_cb_dispatch, e);
 }
 
 int equeue_call_every(equeue_t *q, int ms, void (*cb)(void*), void *data) {
-    struct ecallback *e = equeue_alloc(q, sizeof(struct ecallback));
+    struct equeue_cb *e = equeue_alloc(q, sizeof(struct equeue_cb));
     if (!e) {
         return EQUEUE_ERR_NOMEM;
     }
@@ -549,7 +549,7 @@ int equeue_call_every(equeue_t *q, int ms, void (*cb)(void*), void *data) {
     equeue_setperiod(q, e, ms);
     e->cb = cb;
     e->data = data;
-    return equeue_post(q, ecallback_dispatch, e);
+    return equeue_post(q, equeue_cb_dispatch, e);
 }
 
 // statically allocated event functions
@@ -561,7 +561,7 @@ int equeue_event_create(equeue_t *q, equeue_event_t *e) {
     // defaults
     e->target = 0;
     e->period = -1;
-    e->dtor = NULL;
+    e->x.dtor = NULL;
 
     return 0;
 }
@@ -569,11 +569,12 @@ int equeue_event_create(equeue_t *q, equeue_event_t *e) {
 void equeue_event_destroy(equeue_t *q, equeue_event_t *e) {
     // cancel in case we're pending
     equeue_event_cancel(q, e);
+}
 
-    // call destructor
-    if (e->dtor) {
-        e->dtor(e+1);
-    }
+void equeue_event_setcb(equeue_t *q,
+        equeue_event_t *e, void (*cb)(equeue_event_t*)) {
+    EQUEUE_ASSERT(e->id != EQUEUE_PENDING);
+    e->x.cb = cb;
 }
 
 void equeue_event_setdelay(equeue_t *q,
@@ -588,15 +589,17 @@ void equeue_event_setperiod(equeue_t *q,
     e->period = ms;
 }
 
-void equeue_event_setdtor(equeue_t *q,
-        equeue_event_t *e, void (*dtor)(void *)) {
-    EQUEUE_ASSERT(e->id != EQUEUE_PENDING);
-    e->dtor = dtor;
+static void equeue_event_cb(void *p) {
+    // correct offset to refer to our event header
+    // this just makes a more intuitive interface
+    equeue_event_t *e = (equeue_event_t*)p - 1;
+    e->x.cb(e);
 }
 
-int equeue_event_post(equeue_t *q, void (*cb)(void*), equeue_event_t *e) {
+int equeue_event_post(equeue_t *q, equeue_event_t *e) {
+    EQUEUE_ASSERT(e->x.cb); // was assigned a cb?
     equeue_tick_t tick = equeue_tick();
-    e->cb = cb;
+    e->cb = equeue_event_cb;
     e->target = tick + e->target;
 
     int err = equeue_enqueue(q, e, EQUEUE_PENDING, tick, true);
