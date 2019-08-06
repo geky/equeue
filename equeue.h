@@ -240,8 +240,7 @@ void equeue_event_setperiod(equeue_t *q,
 // nothing happens, allowing coalescing of multiple events into a single
 // function call.
 //
-// Returns 0 on success or a negative error code on failure, currently
-// can not fail
+// Returns 0 on success or EQUEUE_ERR_BUSY if the event was already pending.
 int equeue_event_post(equeue_t *q, equeue_event_t *event);
 
 // Cancels an in-flight, statically allocated event

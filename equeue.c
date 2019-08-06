@@ -30,11 +30,9 @@ static inline equeue_stick_t equeue_clampdiff(
 
 // Increment the unique id in an event, hiding the event from cancel
 static inline void equeue_incid(equeue_t *q, equeue_event_t *e) {
-    e->id += 1;
-    if (((equeue_id_t)e->id << q->npw2) <= 0) {
-        // TODO natural overflow?
-        e->id = 1;
-    }
+    // force overflow at a boundary that both allows the full range of
+    // our internal buffer and a sign bit
+    e->id = (e->id + 1) & ((1 << (8*sizeof(equeue_id_t)-q->npw2-1)) - 1);
 }
 
 
@@ -217,7 +215,7 @@ static int equeue_enqueue(equeue_t *q, equeue_event_t *e,
     // update our id unless we are coalescing and id already matches
     if (coalesce && e->id == id) {
         equeue_mutex_unlock(&q->queuelock);
-        return EQUEUE_ERR_INVAL; // TODO correct err?
+        return EQUEUE_ERR_BUSY;
     }
     e->id = id;
 

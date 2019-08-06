@@ -43,6 +43,7 @@ enum equeue_error {
     EQUEUE_ERR_OK       = 0,    // No error
     EQUEUE_ERR_NOENT    = -2,   // No such event
     EQUEUE_ERR_NOMEM    = -12,  // Out of memory
+    EQUEUE_ERR_BUSY     = -16,  // Device or resource busy
     EQUEUE_ERR_INVAL    = -22,  // Invalid parameter
     EQUEUE_ERR_TIMEDOUT = -110, // Timed out
     EQUEUE_ERR_BREAK    = -125, // Operation canceled
